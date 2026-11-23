@@ -304,11 +304,12 @@ struct PlayerScreen: View {
             HStack(spacing: 10) {
                 Text(fmtTime(Double(scrubbing ? Int(scrub * Double(pc.lengthMs)) : pc.timeMs) / 1000))
                     .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                Slider(value: Binding(get: { scrubbing ? scrub : fraction }, set: { scrub = $0 }), in: 0...1) { editing in
-                    if editing { scrubbing = true; scrub = fraction; hideTask?.cancel() }
-                    else { pc.seek(fraction: scrub); scrubbing = false; scheduleHide() }
+                ScrubBar(value: scrubbing ? scrub : fraction,
+                         buffered: pc.lengthMs > 0 ? Double(pc.bufferedMs) / Double(pc.lengthMs) : 0) { v, done in
+                    if !scrubbing { scrubbing = true; hideTask?.cancel() }
+                    scrub = v
+                    if done { pc.seek(fraction: v); scrubbing = false; scheduleHide() }
                 }
-                .tint(.white)
                 Text("−" + fmtTime(Double(max(pc.lengthMs - pc.timeMs, 0)) / 1000))
                     .font(.system(size: 13, weight: .semibold).monospacedDigit())
             }
@@ -643,5 +644,35 @@ struct GuideSheet: View {
             do { items = try await Xtream.shortEPG(pc.current, acc: acc, ua: pc.app.apiUA) }
             catch { failed = error.localizedDescription }
         }
+    }
+}
+
+/// Progress bar like the Windows player: white = watched, grey = already loaded, faint = not loaded yet.
+struct ScrubBar: View {
+    let value: Double
+    let buffered: Double
+    let onChange: (Double, Bool) -> Void
+    @State private var dragging = false
+
+    var body: some View {
+        GeometryReader { g in
+            let w = g.size.width
+            let v = min(max(value, 0), 1), b = min(max(buffered, v), 1)
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.22)).frame(height: dragging ? 8 : 5)
+                Capsule().fill(.white.opacity(0.55)).frame(width: w * b, height: dragging ? 8 : 5)
+                Capsule().fill(.white).frame(width: w * v, height: dragging ? 8 : 5)
+                Circle().fill(.white).frame(width: dragging ? 22 : 16, height: dragging ? 22 : 16)
+                    .shadow(radius: 2)
+                    .offset(x: w * v - (dragging ? 11 : 8))
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { d in dragging = true; onChange(min(max(d.location.x / max(w, 1), 0), 1), false) }
+                .onEnded { d in dragging = false; onChange(min(max(d.location.x / max(w, 1), 0), 1), true) })
+            .animation(.easeOut(duration: 0.15), value: dragging)
+        }
+        .frame(height: 30)
     }
 }

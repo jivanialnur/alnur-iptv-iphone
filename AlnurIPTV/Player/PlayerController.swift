@@ -60,6 +60,11 @@ final class PlayerController: NSObject, ObservableObject {
     private var pausedSince: Date?
     private var pausedTotal: TimeInterval = 0
     var viewSize: CGSize = .zero
+    @Published var bufferedMs = 0           // movies / episodes: how far the video is loaded (grey part)
+    private var lastDemux: Int32 = 0
+    private var lastTimeForRate = 0
+    private var bytesPerMs: Double = 0
+    private var lastBufferLog = Date.distantPast
     private var pendingStart: Double?      // resume point, applied once the video runs
     private var eventLengthMs = 0           // length reported by VLC (more reliable than media.length)
 
@@ -238,9 +243,14 @@ final class PlayerController: NSObject, ObservableObject {
         guard let media = VLCMedia(url: url) else { error = "Link kharab chhe"; status = nil; return }
         media.addOption(":http-user-agent=\(ua)")
         media.addOption(":network-caching=\(app.settings.caching)")
+        if !isLive && !url.isFileURL {
+            // movies / episodes: read well ahead (64 MB) so short network dips do not stop the video
+            media.addOption(":prefetch-buffer-size=65536")
+        }
         media.addOption(":live-caching=\(app.settings.caching)")
         media.addOption(":http-reconnect")
         pendingStart = (startAt ?? 0) > 5 ? startAt : nil
+        lastDemux = 0; lastTimeForRate = 0; bytesPerMs = 0; bufferedMs = 0
         eventLengthMs = 0
         dlog("open \(current.kind.rawValue) \(current.sid)\(url.isFileURL ? " LOCAL-FILE" : "") ua=\(ua) try=\(attempt) start=\(startAt ?? 0)")
         gotVideo = false
@@ -295,6 +305,7 @@ final class PlayerController: NSObject, ObservableObject {
             break
         }
         if !gotVideo && error == nil && !retrying && Date().timeIntervalSince(openedAt) > 25 { fail() }
+        updateBuffer()
         if Date().timeIntervalSince(lastSave) > 10 { saveProgress() }
     }
 
@@ -399,6 +410,31 @@ final class PlayerController: NSObject, ObservableObject {
         if id.isEmpty { player.deselectAllTextTracks() }
         else { player.textTracks.first(where: { $0.trackId == id })?.isSelectedExclusively = true }
         objectWillChange.send()
+    }
+
+    /// Buffered position for the grey bar: bytes VLC has read but not yet played, turned into time
+    /// with the media's own byte rate (measured while playing).
+    private func updateBuffer() {
+        guard !isLive, gotVideo, lengthMs > 0 else { bufferedMs = 0; return }
+        if let u = streamURL, Downloads.shared.localURL(for: current) != nil || u.isFileURL { bufferedMs = lengthMs; return }
+        guard let st = player.media?.statistics else { return }
+        let read = st.readBytes, demux = st.demuxReadBytes
+        // byte rate of the video itself (bytes demuxed per ms of playback), smoothed
+        let dt = timeMs - lastTimeForRate
+        let db = Int(demux &- lastDemux)
+        if lastTimeForRate > 0, dt > 400, dt < 5000, db > 0 {
+            let r = Double(db) / Double(dt)
+            bytesPerMs = bytesPerMs == 0 ? r : bytesPerMs * 0.8 + r * 0.2
+        }
+        if dt > 400 || dt < 0 { lastTimeForRate = timeMs; lastDemux = demux }
+        guard bytesPerMs > 0 else { bufferedMs = timeMs; return }
+        let aheadBytes = Double(max(Int(read &- demux), 0))
+        let aheadMs = Int(aheadBytes / bytesPerMs) + app.settings.caching
+        bufferedMs = min(lengthMs, timeMs + aheadMs)
+        if Date().timeIntervalSince(lastBufferLog) > 5 {
+            lastBufferLog = Date()
+            dlog("buffer \(current.sid): time \(timeMs / 1000)s, loaded to \(bufferedMs / 1000)s (ahead \(aheadMs / 1000)s)")
+        }
     }
 
     // MARK: extra features
