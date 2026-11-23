@@ -21,7 +21,23 @@ enum UITest {
     }
 }
 
-func dlog(_ s: String) { NSLog("[IPTV] %@", s) }
+enum TestLog {
+    static var enabled = false
+    static let q = DispatchQueue(label: "alnur.log")
+    static let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("iptv.log")
+    static func write(_ s: String) {
+        let line = String(format: "%.3f ", Date().timeIntervalSince1970) + s + "\n"
+        q.async {
+            if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close() }
+            else { try? line.data(using: .utf8)!.write(to: url) }
+        }
+    }
+}
+
+func dlog(_ s: String) {
+    NSLog("[IPTV] %@", s)
+    if TestLog.enabled { TestLog.write("[IPTV] " + s) }
+}
 
 /// Logs when the main thread is blocked (= app frozen) for more than 1 s.
 enum HangWatch {

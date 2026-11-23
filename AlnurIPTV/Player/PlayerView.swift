@@ -296,25 +296,35 @@ final class PlayerHost: UIHostingController<AnyView> {
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
 
-    @MainActor static func present(_ view: AnyView) {
-        guard let root = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows }).first(where: { $0.isKeyWindow })?.rootViewController else { return }
-        var top = root
-        while let p = top.presentedViewController { top = p }
+    @MainActor private static var rootVC: UIViewController? {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }.first(where: { $0.isKeyWindow })?.rootViewController
+    }
+
+    /// Opens the player. If an old player is still closing (animation), waits for it first –
+    /// otherwise iOS silently refuses to show the new one.
+    @MainActor static func present(_ view: AnyView, tries: Int = 0) {
+        guard let root = rootVC else { return }
+        if let shown = root.presentedViewController {
+            if tries < 15 && (shown.isBeingDismissed || shown.isBeingPresented || shown is PlayerHost) {
+                if shown is PlayerHost && !shown.isBeingDismissed { root.dismiss(animated: false) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { present(view, tries: tries + 1) }
+                return
+            }
+            root.dismiss(animated: false)
+        }
         let host = PlayerHost(rootView: view)
         host.modalPresentationStyle = .fullScreen
         host.view.backgroundColor = .black
         AppDelegate.mask = .allButUpsideDown
-        top.present(host, animated: true) {
+        dlog("player shown")
+        root.present(host, animated: true) {
             Orientation.set(.allButUpsideDown, prefer: .landscapeRight)
         }
     }
 
     @MainActor static func dismissIfShown() {
-        guard let root = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows }).first(where: { $0.isKeyWindow })?.rootViewController else { return }
-        var top: UIViewController? = root
-        while let t = top, !(t is PlayerHost) { top = t.presentedViewController }
-        top?.presentingViewController?.dismiss(animated: true)
+        guard let root = rootVC, let shown = root.presentedViewController as? PlayerHost, !shown.isBeingDismissed else { return }
+        root.dismiss(animated: true)
     }
 }

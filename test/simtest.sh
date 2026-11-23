@@ -11,13 +11,13 @@ print(c[-1]['udid'])")
 echo "simulator $UDID"
 xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
 xcrun simctl install "$UDID" "$APP"
-xcrun simctl spawn "$UDID" log stream --style compact --predicate 'eventMessage CONTAINS "[IPTV]"' > $OUT/app.log 2>&1 &
-LOGPID=$!
-sleep 3
+DATA=$(xcrun simctl get_app_container "$UDID" $BID data)
+mkdir -p "$DATA/Documents"; LOG="$DATA/Documents/iptv.log"; : > "$LOG"
+mark() { echo "$(date +%s).000 === $*" >> "$LOG"; }
 
 run() { # name seconds args... ; screenshot at the end
   local name=$1 secs=$2; shift 2
-  echo "=== $name: $*" | tee -a $OUT/app.log
+  echo "=== $name: $*"; mark "$name: $*"
   xcrun simctl launch "$UDID" $BID "$@" >/dev/null
   sleep "$secs"
   xcrun simctl io "$UDID" screenshot "$OUT/$name.png" >/dev/null 2>&1
@@ -36,15 +36,14 @@ run 07_play_hevc 14 -uitest_play live:1002; stop
 run 08_movie_seek 24 -uitest_play movie:5000 -uitest_seekto 100; stop
 # app to home screen while a live channel plays, then back
 run 11a_bg_live 12 -uitest_play live:1004
-xcrun simctl launch "$UDID" com.apple.Preferences >/dev/null; sleep 6
+mark "home screen"; xcrun simctl launch "$UDID" com.apple.Preferences >/dev/null; sleep 6
 xcrun simctl io "$UDID" screenshot "$OUT/11b_home.png" >/dev/null 2>&1
-echo "=== open app again" | tee -a $OUT/app.log
-xcrun simctl openurl "$UDID" alnuriptv://open; sleep 12
+mark "back to app"; xcrun simctl launch "$UDID" $BID >/dev/null; sleep 12
 xcrun simctl io "$UDID" screenshot "$OUT/11c_back_live.png" >/dev/null 2>&1; stop
 # same with a movie (must continue from where it was)
 run 12a_bg_movie 14 -uitest_play movie:5000
-xcrun simctl launch "$UDID" com.apple.Preferences >/dev/null; sleep 6
-xcrun simctl openurl "$UDID" alnuriptv://open; sleep 12
+mark "home screen"; xcrun simctl launch "$UDID" com.apple.Preferences >/dev/null; sleep 6
+mark "back to app"; xcrun simctl launch "$UDID" $BID >/dev/null; sleep 12
 xcrun simctl io "$UDID" screenshot "$OUT/12b_back_movie.png" >/dev/null 2>&1; stop
 # close the player (X) and open another channel
 run 13_close_reopen 20 -uitest_play live:1000 -uitest_close_after 10 -uitest_reopen live:1003
@@ -55,7 +54,7 @@ xcrun simctl io "$UDID" screenshot "$OUT/14_after_stall.png" >/dev/null 2>&1; st
 run 09_library 8 -uitest_tab library; stop
 run 10_settings 6 -uitest_tab settings; stop
 
-kill $LOGPID 2>/dev/null
+sleep 1; cp "$LOG" $OUT/app.log
 echo; echo "==== RESULTS"
 chk() { if grep -q "$2" $OUT/app.log; then echo "PASS  $1"; else echo "FAIL  $1"; fi; }
 chk "login (http, ATS)" "login ok"

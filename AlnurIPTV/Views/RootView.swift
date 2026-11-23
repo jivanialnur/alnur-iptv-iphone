@@ -66,7 +66,7 @@ struct MainTabs: View {
             let q = app.items(k, cat: it.cat)
             dlog("autoplay \(it.name)")
             app.play(q, index: q.firstIndex(of: it) ?? 0)
-            if UITest.closeAfter > 0 {
+            if UITest.closeAfter > 0 { Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(UITest.closeAfter * 1e9))
                 dlog("test: close player")
                 app.player = nil
@@ -76,7 +76,7 @@ struct MainTabs: View {
                     let q2 = app.items(r.0, cat: it2.cat)
                     app.play(q2, index: q2.firstIndex(of: it2) ?? 0)
                 }
-            }
+            } }
         }
     }
 }

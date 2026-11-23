@@ -39,6 +39,3 @@ targets:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: Used to play IPTV streams.
         ITSAppUsesNonExemptEncryption: false
-        CFBundleURLTypes:
-          - CFBundleURLName: com.alnur.iptvplayer
-            CFBundleURLSchemes: [alnuriptv]
