@@ -273,11 +273,13 @@ struct PlayerScreen: View {
     private func toPortrait() {
         dlog("player: to portrait")
         Orientation.set(.allButUpsideDown, prefer: .portrait)
+        withAnimation { showControls = true }
         scheduleHide()
     }
     private func toLandscape() {
         dlog("player: to landscape")
         Orientation.set(.allButUpsideDown, prefer: .landscapeRight)
+        withAnimation { showControls = true }
         scheduleHide()
     }
 
