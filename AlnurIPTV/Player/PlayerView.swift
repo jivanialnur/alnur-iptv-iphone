@@ -67,6 +67,7 @@ struct PlayerScreen: View {
     @State private var scrub: Double = 0
     @State private var hideTask: Task<Void, Never>?
     @State private var sysVolume = SystemVolume()
+    @State private var showGuide = false
 
     init(app: AppState, request: PlayRequest) {
         _pc = StateObject(wrappedValue: PlayerController(app: app, queue: request.queue, index: request.index))
@@ -103,20 +104,43 @@ struct PlayerScreen: View {
                     Text(hint)
                         .font(.title3.bold()).foregroundStyle(.white)
                         .padding(.horizontal, 18).padding(.vertical, 10)
-                        .background(.black.opacity(0.6), in: Capsule())
+                        .glass(Capsule(), interactive: false)
+                        .environment(\.colorScheme, .dark)
                         .allowsHitTesting(false)
                 }
 
-                if showControls { controls(landscape: geo.size.width > geo.size.height) }
+                if let m = pc.message {
+                    VStack {
+                        Text(m).font(.callout.weight(.semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                            .glass(Capsule(), interactive: false)
+                            .environment(\.colorScheme, .dark)
+                            .padding(.top, 70)
+                        Spacer()
+                    }
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                }
+
+                if showControls { controls(landscape: geo.size.width > geo.size.height, size: geo.size) }
+            }
+            .onAppear { pc.viewSize = geo.size }
+            .onChange(of: geo.size) { s in pc.viewSize = s; if pc.aspect == .fill { pc.applyAspect() } }
             }
         }
         .background(Color.black.ignoresSafeArea())
+        .animation(.easeInOut(duration: 0.2), value: pc.message)
+        .sheet(isPresented: $showGuide) { GuideSheet(pc: pc).presentationDetents([.medium, .large]) }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
             pc.start()
             scheduleHide()
+            if UserDefaults.standard.bool(forKey: "uitest_rec") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 6) { pc.toggleRecording() }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 14) { pc.toggleRecording() }
+            }
             let pa = UserDefaults.standard.double(forKey: "uitest_portrait_after")
             if pa > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + pa) { toPortrait() } }
             sysVolume.observe { v in showHint((v == 0 ? "🔇 " : "🔊 ") + "\(Int((v * 100).rounded()))%") }
@@ -128,103 +152,205 @@ struct PlayerScreen: View {
         }
     }
 
-    // MARK: overlay
-    private func controls(landscape: Bool) -> some View {
+    // MARK: overlay (glass controls like the Windows player)
+    private func controls(landscape: Bool, size: CGSize) -> some View {
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
-                // landscape: X first turns the player upright; upright: X closes
-                Button { landscape ? toPortrait() : close() } label: {
-                    Image(systemName: landscape ? "chevron.down" : "xmark").font(.title3.bold()).frame(width: 44, height: 44)
+            // top: back · title / category · actions
+            HStack(alignment: .center, spacing: 10) {
+                GlassIcon(system: landscape ? "chevron.down" : "xmark") { landscape ? toPortrait() : close() }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(titleText).font(.system(size: 16, weight: .bold)).lineLimit(1)
+                    let cat = pc.categoryName
+                    if !cat.isEmpty { Text(cat.uppercased()).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.75)).lineLimit(1) }
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(titleText).font(.headline).lineLimit(1)
-                    if pc.isLive { Text("● LIVE").font(.caption.bold()).foregroundStyle(.red) }
-                }
-                Spacer()
-                if pc.pipAvailable {
-                    Button { pc.startPiP() } label: { Image(systemName: "pip.enter").font(.title3).frame(width: 44, height: 44) }
-                }
-                tracksMenu
-                Button { app.toggleFav(pc.current) } label: {
-                    Image(systemName: app.isFav(pc.current) ? "star.fill" : "star").font(.title3).frame(width: 44, height: 44)
+                .shadow(radius: 3)
+                Spacer(minLength: 6)
+                if landscape {
+                    HStack(spacing: 8) {
+                        if pc.isLive { GlassPill(title: recTitle, system: "record.circle", tint: pc.recording ? .red : .white) { pc.toggleRecording(); scheduleHide() } }
+                        GlassPill(title: "Link", system: "link") { pc.copyLink(); scheduleHide() }
+                        if pc.isLive { GlassPill(title: "TV Guide", system: "info.circle") { showGuide = true } }
+                        GlassPill(title: "Open in VLC", system: "arrow.up.forward.app") { pc.openInVLC() }
+                        GlassIcon(system: app.isFav(pc.current) ? "star.fill" : "star", tint: app.isFav(pc.current) ? .yellow : .white) { app.toggleFav(pc.current) }
+                    }
+                } else {
+                    if pc.recording { Text(recTitle).font(.caption.bold()).foregroundStyle(.red).padding(.horizontal, 10).frame(height: 30).glass(Capsule(), interactive: false) }
+                    moreMenu
                 }
             }
-            .padding(.horizontal, 12).padding(.top, landscape ? 8 : 4)
-            .background(LinearGradient(colors: [.black.opacity(0.7), .clear], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+            .padding(.horizontal, 14).padding(.top, landscape ? 10 : 4)
 
             Spacer()
-
-            HStack(spacing: 46) {
-                if pc.queue.count > 1 {
-                    Button { pc.prev(); scheduleHide() } label: { Image(systemName: "backward.end.fill").font(.title) }
-                        .disabled(!pc.canPrev).opacity(pc.canPrev ? 1 : 0.3)
-                }
-                if !pc.isLive {
-                    Button { pc.skip(-10); scheduleHide() } label: { Image(systemName: "gobackward.10").font(.title) }
-                }
-                Button { pc.togglePause(); scheduleHide() } label: {
-                    Image(systemName: pc.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 44))
-                }
-                if !pc.isLive {
-                    Button { pc.skip(30); scheduleHide() } label: { Image(systemName: "goforward.30").font(.title) }
-                }
-                if pc.queue.count > 1 {
-                    Button { pc.next(); scheduleHide() } label: { Image(systemName: "forward.end.fill").font(.title) }
-                        .disabled(!pc.canNext).opacity(pc.canNext ? 1 : 0.3)
-                }
-            }
-
+            if !landscape { transport(big: true) }
             Spacer()
 
-            if !pc.isLive {
-                HStack(spacing: 10) {
-                    Text(fmtTime(Double(scrubbing ? Int(scrub * Double(pc.lengthMs)) : pc.timeMs) / 1000)).font(.caption.monospacedDigit())
-                    Slider(value: Binding(get: { scrubbing ? scrub : fraction }, set: { scrub = $0 }), in: 0...1) { editing in
-                        if editing { scrubbing = true; scrub = fraction; hideTask?.cancel() }
-                        else { pc.seek(fraction: scrub); scrubbing = false; scheduleHide() }
+            // bottom: progress + buttons
+            VStack(spacing: 10) {
+                progressRow
+                if landscape {
+                    HStack(spacing: 10) {
+                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill") { pc.toggleMute(); scheduleHide() }
+                        Spacer(minLength: 4)
+                        GlassIcon(system: aspectIcon) { pc.cycleAspect(); scheduleHide() }
+                        transport(big: false)
+                        subtitleMenu
+                        audioMenu
+                        settingsMenu
+                        Spacer(minLength: 4)
+                        if pc.pipAvailable { GlassIcon(system: "pip.enter") { pc.startPiP() } }
+                        GlassIcon(system: "arrow.down.right.and.arrow.up.left") { toPortrait() }
                     }
-                    .tint(.red)
-                    Text(fmtTime(Double(pc.lengthMs) / 1000)).font(.caption.monospacedDigit())
-                }
-                .padding(.horizontal, 16).padding(.bottom, 8)
-                .background(LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
-            }
-            if !landscape {
-                HStack {
-                    Spacer()
-                    Button { toLandscape() } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.title3).frame(width: 44, height: 44)
+                } else {
+                    HStack(spacing: 4) {
+                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 40) { pc.toggleMute(); scheduleHide() }
+                        GlassIcon(system: aspectIcon, size: 40) { pc.cycleAspect(); scheduleHide() }
+                        subtitleMenu
+                        audioMenu
+                        settingsMenu
+                        if pc.pipAvailable { GlassIcon(system: "pip.enter", size: 40) { pc.startPiP() } }
+                        GlassIcon(system: "arrow.up.left.and.arrow.down.right", size: 40) { toLandscape() }
                     }
                 }
-                .padding(.horizontal, 12).padding(.bottom, 4)
             }
+            .padding(.horizontal, 14).padding(.bottom, landscape ? 8 : 6)
         }
         .foregroundStyle(.white)
+        .environment(\.colorScheme, .dark)
+        .background(
+            VStack(spacing: 0) {
+                LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom).frame(height: 140)
+                Spacer()
+                LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom).frame(height: 170)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+        )
         .transition(.opacity)
     }
 
-    private var tracksMenu: some View {
+    /// ⏮  −30  ⏯  +30  ⏭
+    private func transport(big: Bool) -> some View {
+        HStack(spacing: big ? 22 : 10) {
+            if pc.queue.count > 1 {
+                GlassIcon(system: "backward.end.fill", size: big ? 52 : 44) { pc.prev(); scheduleHide() }
+                    .disabled(!pc.canPrev).opacity(pc.canPrev ? 1 : 0.35)
+            }
+            if !pc.isLive { GlassIcon(system: "gobackward.30", size: big ? 52 : 44) { pc.skip(-30); scheduleHide() } }
+            GlassIcon(system: pc.isPlaying ? "pause.fill" : "play.fill", size: big ? 76 : 56,
+                      font: .system(size: big ? 32 : 24, weight: .bold)) { pc.togglePause(); scheduleHide() }
+            if !pc.isLive { GlassIcon(system: "goforward.30", size: big ? 52 : 44) { pc.skip(30); scheduleHide() } }
+            if pc.queue.count > 1 {
+                GlassIcon(system: "forward.end.fill", size: big ? 52 : 44) { pc.next(); scheduleHide() }
+                    .disabled(!pc.canNext).opacity(pc.canNext ? 1 : 0.35)
+            }
+        }
+    }
+
+    @ViewBuilder private var progressRow: some View {
+        if pc.isLive {
+            HStack {
+                Button { pc.goLive(); scheduleHide() } label: {
+                    HStack(spacing: 6) {
+                        Circle().fill(.red).frame(width: 8, height: 8)
+                        Text(pc.behindLive > 2 ? "GO LIVE (−\(fmtTime(Double(pc.behindLive))))" : "LIVE")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .padding(.horizontal, 12).frame(height: 30)
+                }
+                .buttonStyle(.plain)
+                .glass(Capsule())
+                .disabled(pc.behindLive <= 2)
+                Spacer()
+                if pc.liveElapsed > 0 {
+                    Text(fmtTime(Double(pc.liveElapsed))).font(.system(size: 13, weight: .semibold).monospacedDigit())
+                        .padding(.horizontal, 12).frame(height: 30).glass(Capsule(), interactive: false)
+                }
+            }
+        } else {
+            HStack(spacing: 10) {
+                Text(fmtTime(Double(scrubbing ? Int(scrub * Double(pc.lengthMs)) : pc.timeMs) / 1000))
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                Slider(value: Binding(get: { scrubbing ? scrub : fraction }, set: { scrub = $0 }), in: 0...1) { editing in
+                    if editing { scrubbing = true; scrub = fraction; hideTask?.cancel() }
+                    else { pc.seek(fraction: scrub); scrubbing = false; scheduleHide() }
+                }
+                .tint(.white)
+                Text("−" + fmtTime(Double(max(pc.lengthMs - pc.timeMs, 0)) / 1000))
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+            }
+            .padding(.horizontal, 14).frame(height: 40)
+            .glass(Capsule(), interactive: false)
+        }
+    }
+
+    private var recTitle: String {
+        guard pc.recording, let s = pc.recordStarted else { return "Rec" }
+        return "REC " + fmtTime(Date().timeIntervalSince(s))
+    }
+
+    private var aspectIcon: String {
+        switch pc.aspect {
+        case .fit: return "rectangle.arrowtriangle.2.inward"
+        case .fill: return "rectangle.arrowtriangle.2.outward"
+        case .wide: return "rectangle.ratio.16.to.9"
+        case .classic: return "rectangle.ratio.4.to.3"
+        }
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Button { app.toggleFav(pc.current) } label: {
+                Label(app.isFav(pc.current) ? "Favourites mathi kadho" : "Favourites ma umero", systemImage: app.isFav(pc.current) ? "star.fill" : "star")
+            }
+            if pc.isLive {
+                Button { pc.toggleRecording() } label: { Label(pc.recording ? "Recording bandh karo" : "Record karo", systemImage: "record.circle") }
+                Button { showGuide = true } label: { Label("TV Guide", systemImage: "info.circle") }
+            }
+            Button { pc.copyLink() } label: { Label("Link copy karo", systemImage: "link") }
+            Button { pc.openInVLC() } label: { Label("Open in VLC", systemImage: "arrow.up.forward.app") }
+        } label: { GlassMenuLabel(system: "ellipsis") }
+    }
+
+    private var subtitleMenu: some View {
+        Menu {
+            let s = pc.subtitleTracks
+            if s.isEmpty { Text("Subtitle nathi") }
+            ForEach(s) { t in
+                Button { pc.setSub(t.id) } label: { Label(t.name, systemImage: t.id == pc.currentSub ? "checkmark" : "captions.bubble") }
+            }
+        } label: { GlassMenuLabel(system: "captions.bubble") }
+    }
+
+    private var audioMenu: some View {
         Menu {
             let a = pc.audioTracks
-            if !a.isEmpty {
-                Section("Audio") {
-                    ForEach(a) { t in
-                        Button { pc.setAudio(t.id) } label: { Label(t.name, systemImage: t.id == pc.currentAudio ? "checkmark" : "speaker.wave.2") }
+            if a.isEmpty { Text("Audio track nathi") }
+            ForEach(a) { t in
+                Button { pc.setAudio(t.id) } label: { Label(t.name, systemImage: t.id == pc.currentAudio ? "checkmark" : "speaker.wave.2") }
+            }
+        } label: { GlassMenuLabel(system: "music.note.list") }
+    }
+
+    private var settingsMenu: some View {
+        Menu {
+            if !pc.isLive {
+                Menu("Speed (\(pc.rate == 1 ? "normal" : String(format: "%.2gx", pc.rate)))") {
+                    ForEach([Float(0.5), 0.75, 1, 1.25, 1.5, 2], id: \.self) { r in
+                        Button { pc.setRate(r) } label: { Label(r == 1 ? "Normal" : String(format: "%.2gx", r), systemImage: r == pc.rate ? "checkmark" : "speedometer") }
                     }
                 }
             }
-            let s = pc.subtitleTracks
-            if !s.isEmpty {
-                Section("Subtitles") {
-                    ForEach(s) { t in
-                        Button { pc.setSub(t.id) } label: { Label(t.name, systemImage: t.id == pc.currentSub ? "checkmark" : "captions.bubble") }
-                    }
+            Menu(pc.sleepAt == nil ? "Sleep timer" : "Sleep timer (chalu)") {
+                ForEach([0, 15, 30, 60, 90], id: \.self) { m in
+                    Button { pc.setSleep(minutes: m) } label: { Text(m == 0 ? "Bandh" : "\(m) minute") }
                 }
             }
-            if a.isEmpty && s.isEmpty { Text("Koi track nathi") }
-        } label: {
-            Image(systemName: "captions.bubble").font(.title3).frame(width: 44, height: 44)
-        }
+            Menu("Screen: \(pc.aspect.title)") {
+                ForEach(PlayerController.AspectMode.allCases, id: \.self) { a in
+                    Button { pc.aspect = a; pc.applyAspect() } label: { Label(a.title, systemImage: a == pc.aspect ? "checkmark" : "rectangle") }
+                }
+            }
+        } label: { GlassMenuLabel(system: "gearshape.fill") }
     }
 
     private func errorBox(_ e: String) -> some View {
@@ -238,7 +364,8 @@ struct PlayerScreen: View {
             }
         }
         .padding(24)
-        .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 16))
+        .glass(RoundedRectangle(cornerRadius: 24), interactive: false)
+        .environment(\.colorScheme, .dark)
         .padding(30)
     }
 
@@ -255,7 +382,8 @@ struct PlayerScreen: View {
                     }
                 }
                 .padding(16)
-                .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 14))
+                .glass(RoundedRectangle(cornerRadius: 22), interactive: false)
+                .environment(\.colorScheme, .dark)
             }
         }
         .padding(30)
@@ -303,8 +431,8 @@ struct PlayerScreen: View {
     private func scheduleHide() {
         hideTask?.cancel()
         hideTask = Task {
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            if !Task.isCancelled && !scrubbing && pc.error == nil {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if !Task.isCancelled && !scrubbing && !showGuide && pc.error == nil {
                 withAnimation(.easeInOut(duration: 0.3)) { showControls = false }
             }
         }
@@ -373,5 +501,45 @@ final class PlayerHost: UIHostingController<AnyView> {
     @MainActor static func dismissIfShown() {
         guard let root = rootVC, let shown = root.presentedViewController as? PlayerHost, !shown.isBeingDismissed else { return }
         root.dismiss(animated: true)
+    }
+}
+
+/// TV Guide (now / next) – this server often has no programme data.
+struct GuideSheet: View {
+    @ObservedObject var pc: PlayerController
+    @State private var items: [Xtream.EPGItem]?
+    @State private var failed: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let items {
+                    if items.isEmpty {
+                        Text("Aa channel mate server par programme ni mahiti nathi.").foregroundStyle(.secondary)
+                    }
+                    ForEach(items) { e in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(e.title).font(.headline)
+                                Spacer()
+                                if let s = e.start { Text(s.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary) }
+                            }
+                            if !e.desc.isEmpty { Text(e.desc).font(.footnote).foregroundStyle(.secondary).lineLimit(3) }
+                        }
+                    }
+                } else if let failed {
+                    Text(failed).foregroundStyle(.red)
+                } else {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                }
+            }
+            .navigationTitle(pc.current.name)
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .task {
+            guard let acc = pc.app.account else { return }
+            do { items = try await Xtream.shortEPG(pc.current, acc: acc, ua: pc.app.apiUA) }
+            catch { failed = error.localizedDescription }
+        }
     }
 }

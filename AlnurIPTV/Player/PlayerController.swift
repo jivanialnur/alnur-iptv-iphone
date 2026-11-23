@@ -43,6 +43,23 @@ final class PlayerController: NSObject, ObservableObject {
     @Published var pipAvailable = false
     @Published var pipActive = false
     private var pipRequested = false
+    // extra player features (1.2)
+    enum AspectMode: Int, CaseIterable { case fit, fill, wide, classic
+        var title: String { ["Fit", "Fill", "16:9", "4:3"][rawValue] }
+    }
+    @Published var aspect: AspectMode = .fit
+    @Published var muted = false
+    @Published var rate: Float = 1
+    @Published var recording = false
+    @Published var recordStarted: Date?
+    @Published var sleepAt: Date?
+    @Published var liveElapsed = 0          // seconds watched on this channel
+    @Published var behindLive = 0           // seconds behind live (after pausing)
+    @Published var message: String?        // short info shown in the player
+    private var playStart: Date?
+    private var pausedSince: Date?
+    private var pausedTotal: TimeInterval = 0
+    var viewSize: CGSize = .zero
     private var pendingStart: Double?      // resume point, applied once the video runs
     private var eventLengthMs = 0           // length reported by VLC (more reliable than media.length)
 
@@ -110,6 +127,7 @@ final class PlayerController: NSObject, ObservableObject {
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         observers = []
         if pipActive { pip?.stopPictureInPicture() }
+        if recording { vlc { $0.stopRecording() } }
         dlog("player closed \(current.sid)")
         vlc { $0.stop() }
     }
@@ -232,6 +250,13 @@ final class PlayerController: NSObject, ObservableObject {
 
     private func tick() {
         if suspended { return }
+        if let s = sleepAt, Date() >= s { dlog("sleep timer: close"); sleepAt = nil; stop(); app.closePlayer(); return }
+        if isLive, let st = playStart {
+            if player.state == .paused, pausedSince == nil { pausedSince = Date() }
+            if player.state == .playing, let p = pausedSince { pausedTotal += Date().timeIntervalSince(p); pausedSince = nil }
+            behindLive = Int(pausedTotal + (pausedSince.map { Date().timeIntervalSince($0) } ?? 0))
+            liveElapsed = Int(Date().timeIntervalSince(st))
+        }
         let nowPlaying = player.isPlaying
         if nowPlaying != isPlaying { pip?.invalidatePlaybackState() }
         isPlaying = nowPlaying
@@ -243,6 +268,8 @@ final class PlayerController: NSObject, ObservableObject {
         if !gotVideo && (player.hasVideoOut || (t > 0 && player.isPlaying)) {
             gotVideo = true
             status = nil
+            playStart = Date(); pausedSince = nil; pausedTotal = 0; behindLive = 0
+            applyAspect()
             if let s = pendingStart {
                 pendingStart = nil
                 dlog("resume seek to \(Int(s))")
@@ -374,6 +401,116 @@ final class PlayerController: NSObject, ObservableObject {
         objectWillChange.send()
     }
 
+    // MARK: extra features
+    var categoryName: String {
+        let c = current
+        let k: Kind = c.kind == .episode ? .series : c.kind
+        if c.kind == .episode { return c.season.map { "Season \($0)" } ?? "" }
+        return app.lists[k]?.cats.first(where: { $0.id == c.cat })?.name ?? ""
+    }
+
+    var streamURL: URL? {
+        guard let acc = app.account else { return nil }
+        return Xtream.streamURL(current, acc: acc, format: app.settings.liveFormat)
+    }
+
+    func say(_ m: String) {
+        message = m
+        let now = m
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in if self?.message == now { self?.message = nil } }
+    }
+
+    func toggleMute() {
+        muted.toggle()
+        let m = muted
+        vlc { $0.audio?.volume = m ? 0 : 100 }
+        say(m ? "🔇 Mute" : "🔊 Avaaj chalu")
+    }
+
+    func cycleAspect() {
+        aspect = AspectMode(rawValue: (aspect.rawValue + 1) % AspectMode.allCases.count) ?? .fit
+        applyAspect()
+        say("Screen: \(aspect.title)")
+    }
+
+    func applyAspect() {
+        let mode = aspect
+        let w = UInt32(max(viewSize.width, 1)), h = UInt32(max(viewSize.height, 1))
+        vlc { p in
+            switch mode {
+            case .fit: p.videoAspectRatio = nil; p.setCropRatio(withNumerator: 0, denominator: 0)
+            case .fill: p.videoAspectRatio = nil; p.setCropRatio(withNumerator: w, denominator: h)
+            case .wide: p.setCropRatio(withNumerator: 0, denominator: 0); p.videoAspectRatio = "16:9"
+            case .classic: p.setCropRatio(withNumerator: 0, denominator: 0); p.videoAspectRatio = "4:3"
+            }
+        }
+    }
+
+    func setRate(_ r: Float) {
+        rate = r
+        vlc { $0.rate = r }
+        say("Speed \(r == 1 ? "normal" : String(format: "%.2gx", r))")
+    }
+
+    func setSleep(minutes: Int) {
+        sleepAt = minutes > 0 ? Date().addingTimeInterval(TimeInterval(minutes * 60)) : nil
+        say(minutes > 0 ? "😴 \(minutes) minute pachhi bandh thashe" : "Sleep timer bandh")
+    }
+
+    /// Back to the live edge after a pause (reconnects the channel).
+    func goLive() {
+        guard isLive else { return }
+        dlog("go live")
+        play(index: index)
+    }
+
+    static var recordingsDir: URL {
+        let d = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Recordings", isDirectory: true)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }
+
+    func toggleRecording() {
+        if recording {
+            dlog("rec stop")
+            vlc { $0.stopRecording() }
+            recording = false
+            recordStarted = nil
+        } else {
+            guard gotVideo else { say("Video chalu thay pachhi record karo"); return }
+            let dir = Self.recordingsDir.path
+            dlog("rec start \(dir)")
+            vlc { $0.startRecording(atPath: dir) }
+            recording = true
+            recordStarted = Date()
+            say("⏺ Recording chalu")
+        }
+    }
+
+    func recordingSaved(_ url: URL?) {
+        recording = false
+        recordStarted = nil
+        let size = (url.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int }) ?? 0
+        dlog("recording saved \(url?.lastPathComponent ?? "-") bytes=\(size)")
+        say(url != nil ? "✅ Recording save: Files app → Alnur IPTV → Recordings" : "Recording save na thayu")
+    }
+
+    func copyLink() {
+        guard let u = streamURL else { return }
+        UIPasteboard.general.string = u.absoluteString
+        say("🔗 Link copy thai gayu")
+    }
+
+    func openInVLC() {
+        guard let u = streamURL,
+              let enc = u.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let x = URL(string: "vlc-x-callback://x-callback-url/stream?url=\(enc)") else { return }
+        UIApplication.shared.open(x) { [weak self] ok in
+            if !ok { self?.say("VLC app install nathi (App Store mathi 'VLC for Mobile')") }
+            else { self?.stop() }
+        }
+    }
+
     // Opened from "Continue watching": fetch the series so the next episode can follow.
     private func loadSeriesQueueIfNeeded() {
         guard queue.count == 1, current.kind == .episode, current.seriesId != nil, let acc = app.account else { return }
@@ -412,5 +549,14 @@ extension PlayerController: VLCMediaPlayerDelegate {
             self.eventLengthMs = Int(length)
             if length > 0 { self.lengthMs = Int(length); self.pip?.invalidatePlaybackState() }
         }
+    }
+}
+
+extension PlayerController {
+    nonisolated func mediaPlayerStartedRecording(_ player: VLCMediaPlayer) {
+        DispatchQueue.main.async { dlog("recording started") }
+    }
+    nonisolated func mediaPlayer(_ player: VLCMediaPlayer, recordingStoppedAt url: URL?) {
+        DispatchQueue.main.async { [weak self] in self?.recordingSaved(url) }
     }
 }

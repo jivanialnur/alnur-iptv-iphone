@@ -212,4 +212,21 @@ enum Xtream {
                          director: str(i["director"]), release: str(i["releasedate"]) ?? str(i["release_date"]),
                          duration: str(i["duration"]), cover: str(i["movie_image"]) ?? m.logo, rating: str(i["rating"]))
     }
+
+    struct EPGItem: Identifiable { let id = UUID(); let title: String; let desc: String; let start: Date?; let end: Date? }
+
+    static func shortEPG(_ it: Item, acc: Account, ua: String) async throws -> [EPGItem] {
+        let j = try await getJSON(apiURL(acc, "get_short_epg", "&stream_id=\(it.sid)&limit=8")!, ua: ua)
+        let rows = (j as? [String: Any])?["epg_listings"] as? [[String: Any]] ?? []
+        func dec(_ v: Any?) -> String {
+            guard let s = str(v) else { return "" }
+            if let d = Data(base64Encoded: s), let t = String(data: d, encoding: .utf8) { return t }
+            return s
+        }
+        return rows.map { r in
+            EPGItem(title: dec(r["title"]), desc: dec(r["description"]),
+                    start: int(r["start_timestamp"]).map { Date(timeIntervalSince1970: TimeInterval($0)) },
+                    end: int(r["stop_timestamp"]).map { Date(timeIntervalSince1970: TimeInterval($0)) })
+        }
+    }
 }

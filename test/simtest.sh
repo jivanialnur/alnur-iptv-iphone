@@ -35,6 +35,8 @@ sleep 14; xcrun simctl io "$UDID" screenshot "$OUT/05_after_next.png" >/dev/null
 run 06_play_ac3 14 -uitest_play live:1000; stop
 run 06b_portrait 9 -uitest_play live:1000 -uitest_portrait_after 6; stop
 run 07_play_hevc 14 -uitest_play live:1002; stop
+run 07b_record 10 -uitest_play live:1004 -uitest_rec YES
+sleep 10; xcrun simctl io "$UDID" screenshot "$OUT/07c_after_rec.png" >/dev/null 2>&1; stop
 run 08_movie_seek 24 -uitest_play movie:5000 -uitest_seekto 100; stop
 # app to home screen while a live channel plays, then back
 run 11a_bg_live 12 -uitest_play live:1004
@@ -80,6 +82,7 @@ grep -q "PiP: true" /tmp/p11 && ! grep -q "background: stop" /tmp/p11 && echo "P
 grep -q "PiP stop (app back)" /tmp/p11 && echo "PASS  live: back to app → PiP closes, player continues" || echo "FAIL  live: PiP not closed on return"
 grep -q "PiP: true" /tmp/p12 && echo "PASS  movie: home swipe → PiP" || echo "FAIL  movie: PiP did not start"
 { grep -q "PiP: true" /tmp/p12 || grep -A3 "foreground: reopen 5000" /tmp/p12 | grep -q "open movie 5000 .*start=[1-9]"; } && echo "PASS  movie: back from home continues at same time" || echo "FAIL  movie: back from home resume"
+grep -q "recording saved .* bytes=[1-9]" $OUT/app.log && echo "PASS  Rec: recording file saved ($(grep -o 'recording saved.*' $OUT/app.log | head -1))" || echo "FAIL  Rec: no recording file"
 grep -q "player: to portrait" $OUT/app.log && echo "PASS  X in landscape turns to portrait (see 06b_portrait.png)" || echo "FAIL  to portrait"
 grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"
 grep -q "PLAYING 1003" $OUT/app.log && echo "PASS  close player + open other channel" || echo "FAIL  close + reopen"
