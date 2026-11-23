@@ -4,8 +4,8 @@ const M = (f) => path.join(__dirname, 'media', f);
 const now = Math.floor(Date.now() / 1000);
 const R = {
   '': { user_info: { auth: 1, status: 'Active', username: 'demo', exp_date: String(now + 86400 * 200), active_cons: '0', max_connections: '1', allowed_output_formats: ['m3u8', 'ts', 'rtmp'] }, server_info: {} },
-  get_live_categories: [{ category_id: '1', category_name: 'India | Gujarati' }, { category_id: '2', category_name: 'Sports' }],
-  get_live_streams: Array.from({ length: 300 }, (_, i) => ({ num: i + 1, name: (i % 3 == 0 ? 'Star Gujarati ' : i % 3 == 1 ? 'Sony Sports ' : 'Aaj Tak ') + (i + 1), stream_id: 1000 + i, stream_icon: i < 3 ? 'http://iptv-mock.test:8899/logo.png' : '', category_id: String(i % 3 == 1 ? 2 : 1) })),
+  get_live_categories: [{ category_id: '1', category_name: 'India | Gujarati' }, { category_id: '2', category_name: 'Sports' }, { category_id: '3', category_name: 'Gujarati Movies 24x7' }, { category_id: '9', category_name: 'Empty Gujarati' }],
+  get_live_streams: Array.from({ length: 300 }, (_, i) => ({ num: i + 1, name: (i % 3 == 0 ? 'Star Gujarati ' : i % 3 == 1 ? 'Sony Sports ' : 'Aaj Tak ') + (i + 1), stream_id: 1000 + i, stream_icon: i < 3 ? 'http://iptv-mock.test:8899/logo.png' : '', category_id: String(i % 3 == 1 ? 2 : i >= 290 ? 3 : 1) })),
   get_vod_categories: [{ category_id: '10', category_name: 'Bollywood' }, { category_id: '11', category_name: 'Hollywood' }],
   get_vod_streams: Array.from({ length: 60 }, (_, i) => ({ name: 'Movie Title ' + (i + 1), stream_id: 5000 + i, stream_icon: '', rating: '7.' + (i % 9), category_id: i % 2 ? '10' : '11', container_extension: 'mkv', added: String(now - i * 1000) })),
   get_series_categories: [{ category_id: '20', category_name: 'Drama' }],

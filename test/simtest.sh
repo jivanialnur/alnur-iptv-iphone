@@ -26,6 +26,7 @@ stop() { xcrun simctl terminate "$UDID" $BID 2>/dev/null; sleep 2; }
 
 LOGIN="http://iptv-mock.test:8899|demo|demo"
 run 01_live 25 -uitest_reset YES -uitest_login "$LOGIN"; stop
+run 01b_search 10 -uitest_search Gujarati; stop
 run 02_movies 10 -uitest_tab movie; stop
 run 03_series_detail 10 -uitest_tab series -uitest_open series:700; stop
 run 04a_controls 3 -uitest_play live:1001 -uitest_next_after 19
@@ -61,6 +62,7 @@ chk() { if grep -q "$2" $OUT/app.log; then echo "PASS  $1"; else echo "FAIL  $1"
 chk "login (http, ATS)" "login ok"
 if grep -q "App Transport Security" $OUT/app.log; then echo "FAIL  ATS blocked http"; else echo "PASS  no ATS block"; fi
 chk "live list" "list live: 300 items"
+chk "search finds categories AND channels (empty category hidden)" "search 'Gujarati': 2 categories, 100 items"
 chk "movie list" "list movie: 60 items"
 chk "interlaced 1080i AC3/MP2 plays" "PLAYING 1001"
 chk "next channel after zap (busy 401 retry)" "PLAYING 1004"

@@ -5,7 +5,8 @@ import SwiftUI
 final class AppState: ObservableObject {
     @Published var account: Account?
     @Published var info = AccountInfo()
-    @Published var lists: [Kind: ListData] = [:]
+    @Published var lists: [Kind: ListData] = [:] { didSet { recount() } }
+    @Published var catCounts: [Kind: [String: Int]] = [:]
     @Published var loading: Set<Kind> = []
     @Published var errors: [Kind: String] = [:]
     @Published var favs: [Item] = []
@@ -156,6 +157,16 @@ final class AppState: ObservableObject {
         } catch {
             dlog("list \(kind.rawValue) failed: \(error.localizedDescription)")
             if !quiet || lists[kind] == nil { errors[kind] = error.localizedDescription }
+        }
+    }
+
+    private var countedAt: [Kind: Date] = [:]
+    private func recount() {
+        for (k, l) in lists where countedAt[k] != l.at {
+            var c: [String: Int] = [:]
+            for it in l.items { c[it.cat, default: 0] += 1 }
+            countedAt[k] = l.at
+            catCounts[k] = c
         }
     }
 

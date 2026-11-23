@@ -6,30 +6,28 @@ struct CatRoute: Hashable {
     var name: String
 }
 
-/// Live / Movies / Series home: big title, search, Most Watched + Suggestions, categories.
+/// Live / Movies / Series home: big title, search, then straight the category list.
+/// Search shows matching categories AND matching channels / movies / series.
 struct BrowseView: View {
     @EnvironmentObject var app: AppState
     let kind: Kind
     @State private var query = ""
     @State private var results: [Item] = []
+    @State private var catResults: [Category] = []
     @State private var path = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
                 if !query.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Section(results.isEmpty ? "Kai malyu nahi" : "\(results.count >= 300 ? "300+" : String(results.count)) results") {
-                        ForEach(Array(results.enumerated()), id: \.element.id) { i, it in
-                            ItemLink(item: it, queue: results, index: i)
-                        }
-                    }
+                    searchSections
                 } else {
-                    homeSections
+                    categorySection
                 }
             }
             .listStyle(.insetGrouped)
             .navigationTitle(kind.title)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search \(kind.title.lowercased())")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search category / \(kind.title.lowercased())")
             .refreshable { await app.ensure(kind, force: true) }
             .navigationDestination(for: CatRoute.self) { r in CategoryView(route: r) }
             .navigationDestination(for: Item.self) { it in DetailView(item: it) }
@@ -37,49 +35,46 @@ struct BrowseView: View {
             .task {
                 await app.ensure(kind)
                 if !UITest.openDone, let t = UITest.parse(UITest.open), t.0 == kind, let it = app.lists[kind]?.items.first(where: { $0.sid == t.1 }) { UITest.openDone = true; path.append(it) }
+                if let q = UITest.search, kind == .live, query.isEmpty { query = q }
             }
             .task(id: query) { await search() }
         }
     }
 
-    @ViewBuilder private var homeSections: some View {
-        let list = app.lists[kind]
-        if kind == .live {
-            let most = app.mostWatched(.live)
-            if !most.isEmpty {
-                Section("Most Watched") {
-                    ForEach(Array(most.enumerated()), id: \.element.id) { i, it in ItemLink(item: it, queue: most, index: i) }
-                }
-            }
-            let favs = app.favs.filter { $0.kind == .live }
-            let sugg = favs.isEmpty ? Array((list?.items ?? []).prefix(8)) : favs
-            if !sugg.isEmpty {
-                Section(favs.isEmpty ? "Suggestions" : "Favourites") {
-                    ForEach(Array(sugg.enumerated()), id: \.element.id) { i, it in ItemLink(item: it, queue: sugg, index: i) }
-                }
-            }
-        } else {
-            let cont = app.cont.filter { kind == .movie ? $0.kind == .movie : $0.kind == .episode }
-            if !cont.isEmpty {
-                Section("Continue Watching") {
-                    ForEach(cont.prefix(10)) { it in ItemLink(item: it, queue: [it], index: 0) }
-                }
-            }
-            if let list {
-                let newest = Array(list.items.sorted { $0.added > $1.added }.prefix(10))
-                Section("Recently Added") {
-                    ForEach(newest) { it in ItemLink(item: it, queue: newest, index: 0) }
+    private var itemWord: String { kind == .live ? "Channels" : kind.title }
+
+    @ViewBuilder private var searchSections: some View {
+        if results.isEmpty && catResults.isEmpty {
+            Section { Text("Kai malyu nahi").foregroundStyle(.secondary) }
+        }
+        if !catResults.isEmpty {
+            Section("Categories (\(catResults.count))") {
+                ForEach(catResults) { c in
+                    NavigationLink(value: CatRoute(kind: kind, cat: c.id, name: c.name)) {
+                        CatRow(name: c.name, count: app.catCounts[kind]?[c.id])
+                    }
                 }
             }
         }
-        if let list {
-            Section("Categories") {
+        if !results.isEmpty {
+            Section("\(itemWord) (\(results.count >= 300 ? "300+" : String(results.count)))") {
+                ForEach(Array(results.enumerated()), id: \.element.id) { i, it in
+                    ItemLink(item: it, queue: results, index: i)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var categorySection: some View {
+        if let list = app.lists[kind] {
+            let counts = app.catCounts[kind] ?? [:]
+            Section {
                 NavigationLink(value: CatRoute(kind: kind, cat: nil, name: "All \(kind.title.lowercased())")) {
                     CatRow(name: "All", count: list.items.count)
                 }
-                ForEach(list.cats) { c in
+                ForEach(list.cats.filter { (counts[$0.id] ?? 0) > 0 }) { c in
                     NavigationLink(value: CatRoute(kind: kind, cat: c.id, name: c.name)) {
-                        CatRow(name: c.name, count: nil)
+                        CatRow(name: c.name, count: counts[c.id])
                     }
                 }
             }
@@ -105,10 +100,12 @@ struct BrowseView: View {
 
     private func search() async {
         let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { results = []; return }
+        guard !q.isEmpty else { results = []; catResults = []; return }
         try? await Task.sleep(nanoseconds: 250_000_000)
         if Task.isCancelled { return }
         let items = app.lists[kind]?.items ?? []
+        let counts = app.catCounts[kind] ?? [:]
+        let cats = (app.lists[kind]?.cats ?? []).filter { $0.name.localizedCaseInsensitiveContains(q) && (counts[$0.id] ?? 0) > 0 }
         let found = await Task.detached(priority: .userInitiated) { () -> [Item] in
             var out: [Item] = []
             let num = Int(q)
@@ -120,7 +117,10 @@ struct BrowseView: View {
             }
             return out
         }.value
-        if !Task.isCancelled { results = found }
+        if !Task.isCancelled {
+            catResults = cats; results = found
+            dlog("search '\(q)': \(cats.count) categories, \(found.count) items")
+        }
     }
 }
 
@@ -130,7 +130,7 @@ struct CatRow: View {
     var body: some View {
         HStack {
             Image(systemName: "folder").foregroundStyle(.tint)
-            Text(name).lineLimit(1)
+            Text(name).lineLimit(2)
             Spacer()
             if let count { Text("\(count)").foregroundStyle(.secondary).font(.footnote) }
         }
