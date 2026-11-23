@@ -16,7 +16,6 @@ struct VLCVideoView: UIViewRepresentable {
 struct PlayerScreen: View {
     @StateObject private var pc: PlayerController
     @EnvironmentObject private var app: AppState
-    @Environment(\.dismiss) private var dismiss
     @State private var showControls = true
     @State private var hint: String?
     @State private var dragMode = 0          // 1 brightness, 2 volume
@@ -68,9 +67,6 @@ struct PlayerScreen: View {
         .persistentSystemOverlays(.hidden)
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
-            Orientation.set(.allButUpsideDown, prefer: .landscapeRight)
-            // the full-screen cover is still animating in on appear – ask again once it is on screen
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { Orientation.set(.allButUpsideDown, prefer: .landscapeRight) }
             pc.start()
             scheduleHide()
         }
@@ -213,7 +209,7 @@ struct PlayerScreen: View {
     // MARK: actions
     private func close() {
         pc.stop()
-        dismiss()
+        app.player = nil
     }
 
     private func toggleControls() {
@@ -255,5 +251,35 @@ struct PlayerScreen: View {
                 let h = hint
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { if hint == h { hint = nil } }
             }
+    }
+}
+
+/// UIKit host for the player: SwiftUI's fullScreenCover only allows portrait, this one allows landscape.
+final class PlayerHost: UIHostingController<AnyView> {
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .allButUpsideDown }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
+    override var prefersStatusBarHidden: Bool { true }
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+
+    @MainActor static func present(_ view: AnyView) {
+        guard let root = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows }).first(where: { $0.isKeyWindow })?.rootViewController else { return }
+        var top = root
+        while let p = top.presentedViewController { top = p }
+        let host = PlayerHost(rootView: view)
+        host.modalPresentationStyle = .fullScreen
+        host.view.backgroundColor = .black
+        AppDelegate.mask = .allButUpsideDown
+        top.present(host, animated: true) {
+            Orientation.set(.allButUpsideDown, prefer: .landscapeRight)
+        }
+    }
+
+    @MainActor static func dismissIfShown() {
+        guard let root = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows }).first(where: { $0.isKeyWindow })?.rootViewController else { return }
+        var top: UIViewController? = root
+        while let t = top, !(t is PlayerHost) { top = t.presentedViewController }
+        top?.presentingViewController?.dismiss(animated: true)
     }
 }

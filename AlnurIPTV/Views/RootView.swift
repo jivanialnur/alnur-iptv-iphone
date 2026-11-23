@@ -30,8 +30,12 @@ struct RootView: View {
                 }
             }
         }
-        .fullScreenCover(item: $app.player) { req in
-            PlayerScreen(app: app, request: req).environmentObject(app)
+        .onChange(of: app.player?.id) { _ in
+            if let req = app.player {
+                PlayerHost.present(AnyView(PlayerScreen(app: app, request: req).environmentObject(app)))
+            } else {
+                PlayerHost.dismissIfShown()
+            }
         }
     }
 }
