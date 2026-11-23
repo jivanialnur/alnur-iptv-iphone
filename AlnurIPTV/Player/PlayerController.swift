@@ -257,8 +257,6 @@ final class PlayerController: NSObject, ObservableObject {
         switch player.state {
         case .opening:
             if !gotVideo { status = attempt > 0 ? "Connecting… (try \(attempt + 1))" : "Opening…" }
-        case .buffering:
-            if !gotVideo { status = "Buffering…" }
         case .error:
             fail()
         case .stopped:
