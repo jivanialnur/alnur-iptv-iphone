@@ -1,4 +1,4 @@
-# Alnur IPTV – iPhone app (planned, nothing built yet)
+# Alnur IPTV – iPhone app
 
 Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short and clear. Test properly before claiming it works.
 
@@ -12,10 +12,20 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
 
 ## Hard facts / decisions still open
 - iOS apps can only be built on macOS (Xcode). Claude's sandbox is Linux → build on **GitHub Actions macOS runner** (this repo).
-- Installing needs either an **Apple Developer account ($99/yr, TestFlight – recommended)** or a free Apple ID with Sideloadly
-  (re-install every 7 days). He has NOT decided yet ("pehla Windows nu kaam, iPhone pachhi") – ask before building.
+- **Decided 2026-11-23: free Apple ID + Sideloadly** (no $99 account). CI builds an UNSIGNED IPA; Sideloadly signs it on his
+  Windows PC. Free-ID limits: re-install every 7 days, max 3 sideloaded apps, Developer Mode must be on in the iPhone.
 - Player: AVPlayer can't play raw MPEG-TS live / AC3 interlaced well → use **MobileVLCKit** (VLCKit via CocoaPods/SPM).
   Streams need UA `VLC/3.0.21 LibVLC/3.0.21`; API needs MAG/Dalvik-like UA (see alnur-iptv-windows/CLAUDE.md "IPTV server facts").
 - Server allows **1 connection at a time** (shared with PC and tablet).
 - Suggested approach: SwiftUI app (native tabs/lists as in his screenshot) + VLCKit player screen; reuse the Xtream API logic
   from `alnur-iptv-windows/renderer/app.js` (probe UAs, list caching, favourites, resume points).
+
+## Project layout / build (v1.0.0 started 2026-11-23)
+- `project.yml` (XcodeGen) + `Podfile` (MobileVLCKit 3.6) – `.xcodeproj`/`Pods` are generated on CI, not in git.
+- `.github/workflows/build.yml` (macos-15): xcodegen → pod install → xcodebuild unsigned → `AlnurIPTV-<ver>.ipa`,
+  uploaded as artifact AND as a GitHub release (`releases/latest`). Bump `MARKETING_VERSION` in project.yml.
+- No Mac / Swift here: compile errors are only seen in CI logs (`gh run view <id> --log-failed`).
+- Code: `AlnurIPTV/` – `Xtream.swift` (API, UA probe, 503 retry), `AppState.swift` (account, lists cached in
+  Application Support, favourites, most watched, resume / continue watching in UserDefaults), `Views/` (tabs Live ·
+  Movies · Series · Library · Settings), `Player/` (VLCKit; stop + 0.8 s wait before next stream; 4 retries per UA then next UA;
+  swipe left = brightness, right = volume; auto-next episode with 5 s countdown).

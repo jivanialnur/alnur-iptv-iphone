@@ -1,0 +1,58 @@
+name: Build iPhone app (unsigned IPA for Sideloadly)
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        run: |
+          brew install xcodegen
+          xcodebuild -version
+
+      - name: Generate project + pods
+        run: |
+          xcodegen generate
+          pod install --repo-update
+
+      - name: Build (no signing – Sideloadly signs it)
+        run: |
+          xcodebuild -workspace AlnurIPTV.xcworkspace -scheme AlnurIPTV \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > build.log 2>&1 || { grep -E "error:|fatal" build.log | sort -u | head -80; tail -40 build.log; exit 1; }
+          grep -E "warning:" build.log | grep -v "Pods/" | sort -u | head -40 || true
+
+      - name: Package IPA
+        run: |
+          APP=build/Build/Products/Release-iphoneos/AlnurIPTV.app
+          ls "$APP" "$APP/Frameworks" || true
+          VER=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Info.plist")
+          echo "VER=$VER" >> $GITHUB_ENV
+          mkdir -p out/Payload && cp -R "$APP" out/Payload/
+          (cd out && zip -qry "../AlnurIPTV-$VER.ipa" Payload)
+          ls -la *.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlnurIPTV-ipa
+          path: "*.ipa"
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${VER}-b${{ github.run_number }}" AlnurIPTV-*.ipa \
+            --title "Alnur IPTV ${VER} (build ${{ github.run_number }})" \
+            --notes "Unsigned IPA – install with Sideloadly (free Apple ID). Re-install every 7 days." --latest

@@ -1,0 +1,261 @@
+import Foundation
+import UIKit
+import MobileVLCKit
+
+/// VLC based player: plays raw MPEG-TS live, AC3, interlaced etc.
+/// The server allows one connection – old stream is stopped and we wait a moment before opening the next.
+struct Track: Identifiable, Hashable {
+    var id: Int32
+    var name: String
+}
+
+@MainActor
+final class PlayerController: ObservableObject {
+    let player = VLCMediaPlayer()
+    unowned let app: AppState
+
+    @Published var queue: [Item]
+    @Published var index: Int
+    @Published var status: String? = "Opening…"
+    @Published var error: String?
+    @Published var isPlaying = false
+    @Published var timeMs = 0
+    @Published var lengthMs = 0
+    @Published var nextIn: Int?
+    @Published var finished = false
+
+    private var timer: Timer?
+    private var token = 0
+    private var attempt = 0
+    private var uaIdx = 0
+    private var gotVideo = false
+    private var openedAt = Date()
+    private var lastSave = Date()
+    private var retrying = false
+    private var countdownTask: Task<Void, Never>?
+
+    var current: Item { queue[index] }
+    var isLive: Bool { current.kind == .live }
+    var canPrev: Bool { index > 0 }
+    var canNext: Bool { index + 1 < queue.count }
+
+    init(app: AppState, queue: [Item], index: Int) {
+        self.app = app
+        self.queue = queue
+        self.index = index
+        player.setDeinterlaceFilter("yadif")
+    }
+
+    private var uaList: [String] { unique([app.account?.streamUA] + STREAM_UAS) }
+
+    func start() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+        play(index: index)
+        loadSeriesQueueIfNeeded()
+    }
+
+    func stop() {
+        saveProgress()
+        token += 1
+        countdownTask?.cancel()
+        timer?.invalidate(); timer = nil
+        player.stop()
+    }
+
+    func play(index i: Int) {
+        guard queue.indices.contains(i) else { return }
+        saveProgress()
+        countdownTask?.cancel(); nextIn = nil
+        index = i
+        attempt = 0; uaIdx = 0; error = nil; finished = false
+        timeMs = 0; lengthMs = 0
+        status = "Opening…"
+        app.recordPlay(current)
+        token += 1
+        retrying = true
+        let tok = token
+        let wasOpen = player.media != nil
+        player.stop()
+        let startAt: Double? = isLive ? nil : app.positions[current.id]
+        DispatchQueue.main.asyncAfter(deadline: .now() + (wasOpen ? 0.8 : 0)) { [weak self] in
+            self?.open(tok: tok, startAt: startAt)
+        }
+    }
+
+    func next() { if canNext { play(index: index + 1) } }
+    func prev() { if canPrev { play(index: index - 1) } }
+
+    private func open(tok: Int, startAt: Double?) {
+        guard tok == token else { return }
+        retrying = false
+        guard let acc = app.account, let url = Xtream.streamURL(current, acc: acc, format: app.settings.liveFormat) else {
+            error = "Aa item mate link nathi"; status = nil; return
+        }
+        let uas = uaList
+        let ua = uas[min(uaIdx, uas.count - 1)]
+        let media = VLCMedia(url: url)
+        media.addOption(":http-user-agent=\(ua)")
+        media.addOption(":network-caching=\(app.settings.caching)")
+        media.addOption(":live-caching=\(app.settings.caching)")
+        media.addOption(":http-reconnect")
+        if let s = startAt, s > 5 { media.addOption(":start-time=\(Int(s))") }
+        player.media = media
+        gotVideo = false
+        openedAt = Date()
+        player.play()
+    }
+
+    private func tick() {
+        isPlaying = player.isPlaying
+        let t = Int(player.time.intValue)
+        if t > 0 { timeMs = t }
+        let len = Int(player.media?.length.intValue ?? 0)
+        if len > 0 { lengthMs = len }
+
+        if !gotVideo && (player.hasVideoOut || (t > 0 && player.isPlaying)) {
+            gotVideo = true
+            status = nil
+            let uas = uaList
+            app.setStreamUA(uas[min(uaIdx, uas.count - 1)])
+        }
+
+        switch player.state {
+        case .opening:
+            if !gotVideo { status = attempt > 0 ? "Connecting… (try \(attempt + 1))" : "Opening…" }
+        case .buffering:
+            if !gotVideo { status = "Buffering…" }
+        case .error:
+            fail()
+        case .ended, .stopped:
+            if retrying || error != nil || finished || player.media == nil { break }
+            if Date().timeIntervalSince(openedAt) < 1.0 { break }
+            if !isLive && gotVideo && lengthMs > 0 && Double(timeMs) > Double(lengthMs) * 0.9 { ended() }
+            else { fail() }
+        default:
+            break
+        }
+        if !gotVideo && error == nil && !retrying && Date().timeIntervalSince(openedAt) > 25 { fail() }
+        if Date().timeIntervalSince(lastSave) > 10 { saveProgress() }
+    }
+
+    private func fail() {
+        guard !retrying, error == nil, !finished else { return }
+        let wasPlaying = gotVideo
+        if wasPlaying { attempt = 0 }
+        attempt += 1
+        if attempt > 4 { uaIdx += 1; attempt = 1 }
+        if uaIdx >= uaList.count {
+            status = nil
+            error = isLive
+                ? "Aa channel chali nathi rahyo.\nServer busy hoy (1 connection – PC / tablet bandh karo) athva channel source par kharab chhe."
+                : "Video chali nathi rahyo.\nServer busy hoy (1 connection – PC / tablet bandh karo)."
+            player.stop()
+            return
+        }
+        retrying = true
+        status = wasPlaying ? "Reconnecting…" : "Connecting… (try \(attempt + 1))"
+        let resume: Double? = isLive ? nil : Double(timeMs) / 1000
+        player.stop()
+        let tok = token
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self, tok == self.token else { return }
+            self.retrying = false
+            self.open(tok: tok, startAt: resume)
+        }
+    }
+
+    func retry() {
+        error = nil; attempt = 0; uaIdx = 0
+        status = "Opening…"
+        token += 1
+        retrying = true
+        let tok = token
+        player.stop()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.open(tok: tok, startAt: (self?.isLive ?? true) ? nil : Double(self?.timeMs ?? 0) / 1000)
+        }
+    }
+
+    private func ended() {
+        finished = true
+        saveProgress(force: true)
+        if current.kind == .episode && canNext && app.settings.autoNext {
+            countdownTask?.cancel()
+            countdownTask = Task { [weak self] in
+                for s in stride(from: 5, through: 1, by: -1) {
+                    await MainActor.run { self?.nextIn = s }
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    if Task.isCancelled { return }
+                }
+                await MainActor.run { self?.next() }
+            }
+        } else {
+            status = nil
+        }
+    }
+
+    func cancelAutoNext() { countdownTask?.cancel(); nextIn = nil }
+
+    func saveProgress(force: Bool = false) {
+        lastSave = Date()
+        guard current.kind == .movie || current.kind == .episode, lengthMs > 0, timeMs > 0 else { return }
+        let pos = force && finished ? Double(lengthMs) / 1000 : Double(timeMs) / 1000
+        app.setPosition(current, pos: pos, dur: Double(lengthMs) / 1000)
+    }
+
+    // MARK: controls
+    func togglePause() {
+        if finished { finished = false; play(index: index); return }
+        if player.isPlaying { player.pause() } else { player.play() }
+    }
+
+    func seek(by secs: Int) {
+        guard !isLive, player.isSeekable else { return }
+        let t = max(0, timeMs + secs * 1000)
+        player.time = VLCTime(int: Int32(t))
+        timeMs = t
+    }
+
+    func seek(fraction f: Double) {
+        guard !isLive, lengthMs > 0 else { return }
+        let t = Int(Double(lengthMs) * min(max(f, 0), 1))
+        player.time = VLCTime(int: Int32(t))
+        timeMs = t
+    }
+
+    var volume: Float {
+        get { Float(player.audio?.volume ?? 100) / 100 }
+        set { player.audio?.volume = Int32(min(max(newValue, 0), 2) * 100) }
+    }
+
+    var audioTracks: [Track] {
+        let ids = (player.audioTrackIndexes as? [NSNumber]) ?? []
+        let names = (player.audioTrackNames as? [String]) ?? []
+        return zip(ids, names).map { Track(id: $0.int32Value, name: $1) }.filter { $0.id >= 0 }
+    }
+    var subtitleTracks: [Track] {
+        let ids = (player.videoSubTitlesIndexes as? [NSNumber]) ?? []
+        let names = (player.videoSubTitlesNames as? [String]) ?? []
+        return zip(ids, names).map { Track(id: $0.int32Value, name: $1) }
+    }
+    var currentAudio: Int32 { player.currentAudioTrackIndex }
+    var currentSub: Int32 { player.currentVideoSubTitleIndex }
+    func setAudio(_ i: Int32) { player.currentAudioTrackIndex = i; objectWillChange.send() }
+    func setSub(_ i: Int32) { player.currentVideoSubTitleIndex = i; objectWillChange.send() }
+
+    // Opened from "Continue watching": fetch the series so the next episode can follow.
+    private func loadSeriesQueueIfNeeded() {
+        guard queue.count == 1, current.kind == .episode, current.seriesId != nil, let acc = app.account else { return }
+        let ep = current
+        Task {
+            guard let info = try? await Xtream.seriesInfo(ep, acc: acc, ua: app.apiUA) else { return }
+            let all = info.seasons.flatMap { $0.episodes }
+            if let i = all.firstIndex(where: { $0.id == ep.id }), queue.count == 1, current.id == ep.id {
+                queue = all; index = i
+            }
+        }
+    }
+}

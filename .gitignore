@@ -1,0 +1,9 @@
+*.xcodeproj
+*.xcworkspace
+Pods/
+Podfile.lock
+build/
+out/
+*.ipa
+AlnurIPTV/Info.plist
+.DS_Store
