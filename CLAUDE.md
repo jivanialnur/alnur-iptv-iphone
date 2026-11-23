@@ -59,5 +59,12 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   but macos-15 (arm64) jobs were "not acquired" for hours → workflow uses `macos-15-intel` (slower; simtest there shows
   MAIN HANG at app start / list load, not in the player – Intel simulator slowness, arm64 run had none).
   `main` = app-v1 (1.0.4). Use `[skip ci]` for doc-only commits.
+- 1.2.0 (vlc4 branch, delivered 2026-11-23 to his Downloads, NOT yet tested by him): Windows-like player controls in
+  Liquid Glass (`Player/Glass.swift`, `.glassEffect` under `#if compiler(>=6.2)`, build job selects Xcode 26.x):
+  back/title+category, Rec (VLC startRecording → Documents/Recordings, Files app), Link copy, TV Guide (get_short_epg),
+  Open in VLC (vlc-x-callback), mute, screen Fit/Fill/16:9/4:3, ±30, subtitle/audio menus, speed, sleep timer, PiP,
+  GO LIVE (−behind) + elapsed. CI: `simtest` = iOS 18 sim via Xcode 16.4 (functional, all pass except PiP – sim
+  unsupported – and Intel MAIN HANG at app start); `glass` job = iOS 26 sim screenshots (release `glass-<branch>`).
+  Next: ask him whether PiP works on the iPhone and how 1.2.0 feels.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.
