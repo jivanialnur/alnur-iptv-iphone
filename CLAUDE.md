@@ -52,7 +52,12 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   PlayerController as VLCPictureInPictureMediaControlling; starts PiP on willResignActive. With a18 everything played
   but `pictureInPictureReady` was never called (no "PiP ready" log) and `:start-time` was ignored (now: seek after start).
   Reference that works: github.com/cornejobarraza/expo-libvlc-player (VLCKit 4.0.0a26, Swift drawable).
-  a26 run NOT tested yet: **GitHub Actions stopped (billing / spending limit, private repo → macOS minutes x10)**.
-  Each push = build + simtest ≈ 2 macOS jobs; use `[skip ci]` for doc-only commits.
+  a26 builds and plays (1.1.0, pre-release, delivered to his Downloads as AlnurIPTV-1.1.0-PiP.ipa for a real-iPhone test).
+  **Simulator reports `isPictureInPictureSupported() == false` → PiP can only be tested on his iPhone.** a26 has no
+  `.buffering` state. Resume = seek after first frame (`:start-time` ignored by VLC 4).
+- Repo was recreated PUBLIC on 2026-11-23 (history rewritten, server address removed; never commit it). Public = free CI,
+  but macos-15 (arm64) jobs were "not acquired" for hours → workflow uses `macos-15-intel` (slower; simtest there shows
+  MAIN HANG at app start / list load, not in the player – Intel simulator slowness, arm64 run had none).
+  `main` = app-v1 (1.0.4). Use `[skip ci]` for doc-only commits.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.
