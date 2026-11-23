@@ -42,6 +42,8 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
 - ATS: only `NSAllowsArbitraryLoads` – adding `...ForMedia` silently disables it (1.0.0 login bug). Test uses host
   `iptv-mock.test` (/etc/hosts) because localhost/IPs are exempt from ATS and hid that bug.
 - Test log = app's own `Documents/iptv.log` (+ `HangWatch` main-thread watchdog), copied by simtest.sh.
-- Versions: 1.0.0 first · 1.0.1 ATS/login fix · 1.0.2 X closes player, no freeze, background handling, instant volume.
-- Work is on branch `app-v1` (16/16 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
+- Versions: 1.0.0 first · 1.0.1 ATS/login fix · 1.0.2 X closes player, no freeze, background handling, instant volume
+  · 1.0.3 (his wish) Live/Movies/Series open straight on the category list (no Most Watched / Suggestions /
+  Recently Added; empty categories hidden, counts shown); search shows matching categories AND items.
+- Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.
