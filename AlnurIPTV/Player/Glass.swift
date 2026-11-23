@@ -29,10 +29,10 @@ extension EnvironmentValues {
 struct GlassIcon: View {
     @Environment(\.glassHelp) private var help
     let system: String
-    var label: String? = nil
     var size: CGFloat = 44
     var font: Font = .system(size: 18, weight: .semibold)
     var tint: Color = .white
+    var label: String? = nil
     let action: () -> Void
 
     var body: some View {

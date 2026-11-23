@@ -233,7 +233,7 @@ struct PlayerScreen: View {
             GlassPill(title: "Link", system: "link", showTitle: labels) { pc.copyLink(); scheduleHide() }
             if pc.isLive { GlassPill(title: "TV Guide", system: "info.circle", showTitle: labels) { showGuide = true } }
             GlassPill(title: "Open in VLC", system: "arrow.up.forward.app", showTitle: labels) { pc.openInVLC() }
-            GlassIcon(system: app.isFav(pc.current) ? "star.fill" : "star", label: "Favourite", tint: app.isFav(pc.current) ? .yellow : .white) { app.toggleFav(pc.current) }
+            GlassIcon(system: app.isFav(pc.current) ? "star.fill" : "star", tint: app.isFav(pc.current) ? .yellow : .white, label: "Favourite") { app.toggleFav(pc.current) }
         }
         .fixedSize()
     }
