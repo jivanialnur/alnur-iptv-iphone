@@ -42,17 +42,20 @@ struct GlassPill: View {
     let title: String
     let system: String
     var tint: Color = .white
+    var showTitle = true
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: system).foregroundStyle(tint)
-                Text(title)
+                if showTitle { Text(title).lineLimit(1) }
             }
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 14).frame(height: 36)
+            .padding(.horizontal, showTitle ? 14 : 0)
+            .frame(minWidth: 44, minHeight: 44)
+            .fixedSize()
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

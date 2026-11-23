@@ -158,20 +158,20 @@ struct PlayerScreen: View {
             HStack(alignment: .center, spacing: 10) {
                 GlassIcon(system: landscape ? "chevron.down" : "xmark") { landscape ? toPortrait() : close() }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(titleText).font(.system(size: 16, weight: .bold)).lineLimit(1)
+                    Text(titleText).font(.system(size: 16, weight: .bold)).lineLimit(1).truncationMode(.tail)
                     let cat = pc.categoryName
                     if !cat.isEmpty { Text(cat.uppercased()).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.75)).lineLimit(1) }
                 }
+                .frame(minWidth: 120, maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(0)
                 .shadow(radius: 3)
-                Spacer(minLength: 6)
                 if landscape {
-                    HStack(spacing: 8) {
-                        if pc.isLive { GlassPill(title: recTitle, system: "record.circle", tint: pc.recording ? .red : .white) { pc.toggleRecording(); scheduleHide() } }
-                        GlassPill(title: "Link", system: "link") { pc.copyLink(); scheduleHide() }
-                        if pc.isLive { GlassPill(title: "TV Guide", system: "info.circle") { showGuide = true } }
-                        GlassPill(title: "Open in VLC", system: "arrow.up.forward.app") { pc.openInVLC() }
-                        GlassIcon(system: app.isFav(pc.current) ? "star.fill" : "star", tint: app.isFav(pc.current) ? .yellow : .white) { app.toggleFav(pc.current) }
+                    // full labels if they fit, otherwise icons only – text never breaks into letters
+                    ViewThatFits(in: .horizontal) {
+                        topActions(labels: true)
+                        topActions(labels: false)
                     }
+                    .layoutPriority(1)
                 } else {
                     if pc.recording { Text(recTitle).font(.caption.bold()).foregroundStyle(.red).padding(.horizontal, 10).frame(height: 30).glass(Capsule(), interactive: false) }
                     moreMenu
@@ -225,6 +225,17 @@ struct PlayerScreen: View {
             .allowsHitTesting(false)
         )
         .transition(.opacity)
+    }
+
+    private func topActions(labels: Bool) -> some View {
+        HStack(spacing: 8) {
+            if pc.isLive { GlassPill(title: recTitle, system: "record.circle", tint: pc.recording ? .red : .white, showTitle: labels) { pc.toggleRecording(); scheduleHide() } }
+            GlassPill(title: "Link", system: "link", showTitle: labels) { pc.copyLink(); scheduleHide() }
+            if pc.isLive { GlassPill(title: "TV Guide", system: "info.circle", showTitle: labels) { showGuide = true } }
+            GlassPill(title: "Open in VLC", system: "arrow.up.forward.app", showTitle: labels) { pc.openInVLC() }
+            GlassIcon(system: app.isFav(pc.current) ? "star.fill" : "star", tint: app.isFav(pc.current) ? .yellow : .white) { app.toggleFav(pc.current) }
+        }
+        .fixedSize()
     }
 
     /// ⏮  −30  ⏯  +30  ⏭
