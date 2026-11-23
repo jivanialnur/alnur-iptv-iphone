@@ -16,9 +16,20 @@ extension View {
     }
 }
 
+/// Long press on a glass button shows what it does (set by the player).
+private struct GlassHelpKey: EnvironmentKey { static let defaultValue: ((String) -> Void)? = nil }
+extension EnvironmentValues {
+    var glassHelp: ((String) -> Void)? {
+        get { self[GlassHelpKey.self] }
+        set { self[GlassHelpKey.self] = newValue }
+    }
+}
+
 /// Round glass icon button.
 struct GlassIcon: View {
+    @Environment(\.glassHelp) private var help
     let system: String
+    var label: String? = nil
     var size: CGFloat = 44
     var font: Font = .system(size: 18, weight: .semibold)
     var tint: Color = .white
@@ -34,11 +45,14 @@ struct GlassIcon: View {
         }
         .buttonStyle(.plain)
         .glass(Circle())
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in if let label { help?(label) } })
+        .accessibilityLabel(label ?? system)
     }
 }
 
 /// Glass capsule with icon + text (Rec, Link, TV Guide …).
 struct GlassPill: View {
+    @Environment(\.glassHelp) private var help
     let title: String
     let system: String
     var tint: Color = .white
@@ -60,12 +74,15 @@ struct GlassPill: View {
         }
         .buttonStyle(.plain)
         .glass(Capsule())
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in help?(title) })
+        .accessibilityLabel(title)
     }
 }
 
 /// Icon used as a Menu label, in glass.
 struct GlassMenuLabel: View {
     let system: String
+    var label: String? = nil
     var size: CGFloat = 44
     var body: some View {
         Image(systemName: system)

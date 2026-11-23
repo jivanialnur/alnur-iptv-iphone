@@ -156,14 +156,14 @@ struct PlayerScreen: View {
         VStack(spacing: 0) {
             // top: back · title / category · actions
             HStack(alignment: .center, spacing: 10) {
-                GlassIcon(system: landscape ? "chevron.down" : "xmark") { landscape ? toPortrait() : close() }
+                GlassIcon(system: landscape ? "chevron.down" : "xmark", label: landscape ? "Ubhu (vertical) karo" : "Bandh karo") { landscape ? toPortrait() : close() }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(titleText).font(.system(size: 16, weight: .bold)).lineLimit(1).truncationMode(.tail)
+                    Text(titleText).font(.system(size: 16, weight: .bold)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     let cat = pc.categoryName
                     if !cat.isEmpty { Text(cat.uppercased()).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.75)).lineLimit(1) }
                 }
-                .frame(minWidth: 120, maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(0)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
                 .shadow(radius: 3)
                 if landscape {
                     // full labels if they fit, otherwise icons only – text never breaks into letters
@@ -171,7 +171,6 @@ struct PlayerScreen: View {
                         topActions(labels: true)
                         topActions(labels: false)
                     }
-                    .layoutPriority(1)
                 } else {
                     if pc.recording { Text(recTitle).font(.caption.bold()).foregroundStyle(.red).padding(.horizontal, 10).frame(height: 30).glass(Capsule(), interactive: false) }
                     moreMenu
@@ -188,26 +187,26 @@ struct PlayerScreen: View {
                 progressRow
                 if landscape {
                     HStack(spacing: 10) {
-                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill") { pc.toggleMute(); scheduleHide() }
+                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute / avaaj") { pc.toggleMute(); scheduleHide() }
                         Spacer(minLength: 4)
-                        GlassIcon(system: aspectIcon) { pc.cycleAspect(); scheduleHide() }
+                        GlassIcon(system: aspectIcon, label: "Screen size: \(pc.aspect.title)") { pc.cycleAspect(); scheduleHide() }
                         transport(big: false)
                         subtitleMenu
                         audioMenu
                         settingsMenu
                         Spacer(minLength: 4)
-                        if pc.pipAvailable { GlassIcon(system: "pip.enter") { pc.startPiP() } }
-                        GlassIcon(system: "arrow.down.right.and.arrow.up.left") { toPortrait() }
+                        if pc.pipAvailable { GlassIcon(system: "pip.enter", label: "Nani window (PiP)") { pc.startPiP() } }
+                        GlassIcon(system: "arrow.down.right.and.arrow.up.left", label: "Ubhu (vertical) karo") { toPortrait() }
                     }
                 } else {
                     HStack(spacing: 4) {
-                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 40) { pc.toggleMute(); scheduleHide() }
-                        GlassIcon(system: aspectIcon, size: 40) { pc.cycleAspect(); scheduleHide() }
+                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 40, label: "Mute / avaaj") { pc.toggleMute(); scheduleHide() }
+                        GlassIcon(system: aspectIcon, size: 40, label: "Screen size: \(pc.aspect.title)") { pc.cycleAspect(); scheduleHide() }
                         subtitleMenu
                         audioMenu
                         settingsMenu
-                        if pc.pipAvailable { GlassIcon(system: "pip.enter", size: 40) { pc.startPiP() } }
-                        GlassIcon(system: "arrow.up.left.and.arrow.down.right", size: 40) { toLandscape() }
+                        if pc.pipAvailable { GlassIcon(system: "pip.enter", size: 40, label: "Nani window (PiP)") { pc.startPiP() } }
+                        GlassIcon(system: "arrow.up.left.and.arrow.down.right", size: 40, label: "Full screen") { toLandscape() }
                     }
                 }
             }
@@ -215,6 +214,7 @@ struct PlayerScreen: View {
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
+        .environment(\.glassHelp, { [weak pc] t in pc?.say(t) })
         .background(
             VStack(spacing: 0) {
                 LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom).frame(height: 140)
@@ -233,7 +233,7 @@ struct PlayerScreen: View {
             GlassPill(title: "Link", system: "link", showTitle: labels) { pc.copyLink(); scheduleHide() }
             if pc.isLive { GlassPill(title: "TV Guide", system: "info.circle", showTitle: labels) { showGuide = true } }
             GlassPill(title: "Open in VLC", system: "arrow.up.forward.app", showTitle: labels) { pc.openInVLC() }
-            GlassIcon(system: app.isFav(pc.current) ? "star.fill" : "star", tint: app.isFav(pc.current) ? .yellow : .white) { app.toggleFav(pc.current) }
+            GlassIcon(system: app.isFav(pc.current) ? "star.fill" : "star", label: "Favourite", tint: app.isFav(pc.current) ? .yellow : .white) { app.toggleFav(pc.current) }
         }
         .fixedSize()
     }
@@ -242,15 +242,15 @@ struct PlayerScreen: View {
     private func transport(big: Bool) -> some View {
         HStack(spacing: big ? 22 : 10) {
             if pc.queue.count > 1 {
-                GlassIcon(system: "backward.end.fill", size: big ? 52 : 44) { pc.prev(); scheduleHide() }
+                GlassIcon(system: "backward.end.fill", size: big ? 52 : 44, label: "Aagalnu") { pc.prev(); scheduleHide() }
                     .disabled(!pc.canPrev).opacity(pc.canPrev ? 1 : 0.35)
             }
-            if !pc.isLive { GlassIcon(system: "gobackward.30", size: big ? 52 : 44) { pc.skip(-30); scheduleHide() } }
+            if !pc.isLive { GlassIcon(system: "gobackward.30", size: big ? 52 : 44, label: "30 second pachhal") { pc.skip(-30); scheduleHide() } }
             GlassIcon(system: pc.isPlaying ? "pause.fill" : "play.fill", size: big ? 76 : 56,
                       font: .system(size: big ? 32 : 24, weight: .bold)) { pc.togglePause(); scheduleHide() }
-            if !pc.isLive { GlassIcon(system: "goforward.30", size: big ? 52 : 44) { pc.skip(30); scheduleHide() } }
+            if !pc.isLive { GlassIcon(system: "goforward.30", size: big ? 52 : 44, label: "30 second aagal") { pc.skip(30); scheduleHide() } }
             if pc.queue.count > 1 {
-                GlassIcon(system: "forward.end.fill", size: big ? 52 : 44) { pc.next(); scheduleHide() }
+                GlassIcon(system: "forward.end.fill", size: big ? 52 : 44, label: "Aavtu") { pc.next(); scheduleHide() }
                     .disabled(!pc.canNext).opacity(pc.canNext ? 1 : 0.35)
             }
         }
