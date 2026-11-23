@@ -438,10 +438,10 @@ final class PlayerController: NSObject, ObservableObject {
         let w = UInt32(max(viewSize.width, 1)), h = UInt32(max(viewSize.height, 1))
         vlc { p in
             switch mode {
-            case .fit: p.videoAspectRatio = nil; p.setCropRatio(withNumerator: 0, denominator: 0)
-            case .fill: p.videoAspectRatio = nil; p.setCropRatio(withNumerator: w, denominator: h)
-            case .wide: p.setCropRatio(withNumerator: 0, denominator: 0); p.videoAspectRatio = "16:9"
-            case .classic: p.setCropRatio(withNumerator: 0, denominator: 0); p.videoAspectRatio = "4:3"
+            case .fit: p.videoAspectRatio = nil; p.setCropRatioWithNumerator(0, denominator: 0)
+            case .fill: p.videoAspectRatio = nil; p.setCropRatioWithNumerator(w, denominator: h)
+            case .wide: p.setCropRatioWithNumerator(0, denominator: 0); p.videoAspectRatio = "16:9"
+            case .classic: p.setCropRatioWithNumerator(0, denominator: 0); p.videoAspectRatio = "4:3"
             }
         }
     }
