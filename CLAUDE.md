@@ -65,6 +65,14 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   Open in VLC (vlc-x-callback), mute, screen Fit/Fill/16:9/4:3, ±30, subtitle/audio menus, speed, sleep timer, PiP,
   GO LIVE (−behind) + elapsed. CI: `simtest` = iOS 18 sim via Xcode 16.4 (functional, all pass except PiP – sim
   unsupported – and Intel MAIN HANG at app start); `glass` job = iOS 26 sim screenshots (release `glass-<branch>`).
-  Next: ask him whether PiP works on the iPhone and how 1.2.0 feels.
+  · 1.2.x title never shortened (2 lines), landscape top buttons ViewThatFits labels → icons, long press on any glass
+  button shows its name (env `glassHelp` → pc.say). · 1.3.0 Downloads (`Downloads.swift`: background URLSession, falls back
+  to a normal session when the background service fails – it always does in the simulator; Documents/Downloads,
+  Library → Downloads, offline play via `Downloads.shared.localURL`). · 1.3.1 middle swipe like YouTube (left third =
+  brightness, right third = volume, middle: up = landscape / Fill zoom, down = unzoom / portrait / close).
+  · 1.3.2 double tap left/right = −10/+10 s (adds up), hold right = 2x. · 1.3.3 short title keeps labelled buttons.
+  1.3.3 sent in chat 2026-11-23 (PC was off). simtest: all pass except PiP (sim), Intel MAIN HANG at launch, and
+  timing flukes (search) from the slow Intel simulator.
+  Next: ask him whether PiP works on the iPhone and how 1.3.3 feels; then merge vlc4 → main.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.
