@@ -10,6 +10,8 @@ enum UITest {
     static var open: String? { d.string(forKey: "uitest_open") }
     static var nextAfter: Double { d.double(forKey: "uitest_next_after") }
     static var seekTo: Double { d.double(forKey: "uitest_seekto") }
+    static var autoplayDone = false
+    static var openDone = false
     static var reset: Bool { d.bool(forKey: "uitest_reset") }
     static var closeAfter: Double { d.double(forKey: "uitest_close_after") }
     static var reopen: String? { d.string(forKey: "uitest_reopen") }

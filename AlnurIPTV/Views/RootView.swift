@@ -53,7 +53,8 @@ struct MainTabs: View {
         }
         .task { await app.refreshAccount() }
         .task {
-            guard let t = UITest.parse(UITest.play) else { return }
+            guard !UITest.autoplayDone, let t = UITest.parse(UITest.play) else { return }
+            UITest.autoplayDone = true
             let (k, id) = t
             await app.ensure(k)
             guard let it = app.lists[k]?.items.first(where: { $0.sid == id }) else { dlog("autoplay: \(id) not found"); return }

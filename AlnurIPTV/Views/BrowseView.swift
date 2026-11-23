@@ -36,7 +36,7 @@ struct BrowseView: View {
             .overlay { stateOverlay }
             .task {
                 await app.ensure(kind)
-                if let t = UITest.parse(UITest.open), t.0 == kind, let it = app.lists[kind]?.items.first(where: { $0.sid == t.1 }) { path.append(it) }
+                if !UITest.openDone, let t = UITest.parse(UITest.open), t.0 == kind, let it = app.lists[kind]?.items.first(where: { $0.sid == t.1 }) { UITest.openDone = true; path.append(it) }
             }
             .task(id: query) { await search() }
         }

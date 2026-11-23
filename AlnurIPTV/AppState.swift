@@ -77,8 +77,11 @@ final class AppState: ObservableObject {
     }
 
     /// At app start: lists are shown from disk at once; account is checked quietly.
+    private var accountChecked = false
+    /// Once per app start (the tab screen re-appears every time the player closes).
     func refreshAccount() async {
-        guard var acc = account else { return }
+        guard !accountChecked, var acc = account else { return }
+        accountChecked = true
         do {
             let r = try await Xtream.login(acc)
             if acc.apiUA != r.ua { acc.apiUA = r.ua; account = acc; save("account", acc) }
@@ -100,6 +103,7 @@ final class AppState: ObservableObject {
     }
 
     func logout() {
+        accountChecked = false
         account = nil
         ud.removeObject(forKey: "account")
         clearLists()
