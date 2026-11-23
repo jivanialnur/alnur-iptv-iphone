@@ -8,7 +8,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         if UserDefaults.standard.object(forKey: "uitest_login") != nil || UserDefaults.standard.object(forKey: "uitest_play") != nil
-            || UserDefaults.standard.object(forKey: "uitest_tab") != nil || UserDefaults.standard.bool(forKey: "uitest_log") {
+            || UserDefaults.standard.object(forKey: "uitest_tab") != nil || UserDefaults.standard.bool(forKey: "uitest_log")
+            || UserDefaults.standard.object(forKey: "uitest_search") != nil {
             TestLog.enabled = true
             HangWatch.start()
         }
