@@ -244,7 +244,7 @@ struct PlayerScreen: View {
     // MARK: actions
     private func close() {
         pc.stop()
-        app.player = nil
+        app.closePlayer()
     }
 
     private func toggleControls() {

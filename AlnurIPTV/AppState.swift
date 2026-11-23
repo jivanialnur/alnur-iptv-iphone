@@ -216,8 +216,17 @@ final class AppState: ObservableObject {
     }
 
     // MARK: play
+    // The tab screens are paused by iOS while the full-screen player covers them,
+    // so the player is opened / closed here directly (not via a SwiftUI onChange).
     func play(_ queue: [Item], index: Int) {
         guard queue.indices.contains(index) else { return }
-        player = PlayRequest(queue: queue, index: index)
+        let req = PlayRequest(queue: queue, index: index)
+        player = req
+        PlayerHost.present(AnyView(PlayerScreen(app: self, request: req).environmentObject(self)))
+    }
+
+    func closePlayer() {
+        player = nil
+        PlayerHost.dismissIfShown()
     }
 }

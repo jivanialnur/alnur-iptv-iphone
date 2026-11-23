@@ -46,7 +46,8 @@ mark "home screen"; xcrun simctl launch "$UDID" com.apple.Preferences >/dev/null
 mark "back to app"; xcrun simctl launch "$UDID" $BID >/dev/null; sleep 12
 xcrun simctl io "$UDID" screenshot "$OUT/12b_back_movie.png" >/dev/null 2>&1; stop
 # close the player (X) and open another channel
-run 13_close_reopen 20 -uitest_play live:1000 -uitest_close_after 10 -uitest_reopen live:1003
+run 13a_after_close 12 -uitest_play live:1000 -uitest_close_after 10 -uitest_reopen live:1003
+sleep 9
 xcrun simctl io "$UDID" screenshot "$OUT/13_close_reopen.png" >/dev/null 2>&1; stop
 # close while the server has stopped sending (stalled connection), then open another
 run 14_stall_close 24 -uitest_play live:1005 -uitest_close_after 9 -uitest_reopen live:1006
@@ -70,6 +71,7 @@ chk "movie resume point saved (~100s)" "save pos 5000 1[0-9][0-9]/180"
 cnt() { grep -c "$1" $OUT/app.log; }
 [ "$(cnt 'background: stop 1004')" -ge 1 ] && [ "$(cnt 'PLAYING 1004')" -ge 3 ] && echo "PASS  live: home screen and back plays again" || echo "FAIL  live: home screen and back"
 [ "$(cnt 'foreground: reopen 5000')" -ge 1 ] && grep -A3 "foreground: reopen 5000" $OUT/app.log | grep -q "open movie 5000 .*start=[1-9]" && echo "PASS  movie: back from home continues at same time" || echo "FAIL  movie: back from home resume"
+grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"
 grep -q "PLAYING 1003" $OUT/app.log && echo "PASS  close player + open other channel" || echo "FAIL  close + reopen"
 grep -q "PLAYING 1006" $OUT/app.log && echo "PASS  close a stalled stream + open other channel" || echo "FAIL  stalled close + reopen"
 if grep -q "MAIN HANG" $OUT/app.log; then echo "FAIL  app froze:"; grep -o "MAIN HANG.*" $OUT/app.log; else echo "PASS  app never froze (main thread watchdog)"; fi

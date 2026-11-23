@@ -30,13 +30,7 @@ struct RootView: View {
                 }
             }
         }
-        .onChange(of: app.player?.id) { _ in
-            if let req = app.player {
-                PlayerHost.present(AnyView(PlayerScreen(app: app, request: req).environmentObject(app)))
-            } else {
-                PlayerHost.dismissIfShown()
-            }
-        }
+
     }
 }
 
@@ -69,7 +63,7 @@ struct MainTabs: View {
             if UITest.closeAfter > 0 { Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(UITest.closeAfter * 1e9))
                 dlog("test: close player")
-                app.player = nil
+                app.closePlayer()
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 if let r = UITest.parse(UITest.reopen), let it2 = app.lists[r.0]?.items.first(where: { $0.sid == r.1 }) {
                     dlog("test: reopen \(it2.sid)")
