@@ -185,9 +185,9 @@ struct PlayerScreen: View {
                     let cat = pc.categoryName
                     if !cat.isEmpty { Text(cat.uppercased()).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.75)).lineLimit(1) }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
                 .shadow(radius: 3)
+                Spacer(minLength: 6)
                 if landscape {
                     // full labels if they fit, otherwise icons only – text never breaks into letters
                     ViewThatFits(in: .horizontal) {
