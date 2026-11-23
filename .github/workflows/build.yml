@@ -74,6 +74,46 @@ jobs:
       - name: Pick newest Xcode (26 = Liquid Glass)
         run: |
           ls -d /Applications/Xcode*.app || true
+          X=$(ls -d /Applications/Xcode_16.4.app 2>/dev/null | tail -1)
+          if [ -n "$X" ]; then sudo xcode-select -s "$X"; fi
+          xcodebuild -version
+          xcrun simctl list runtimes | tail -5
+      - name: Generate project + pods
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          pod install --repo-update
+      - name: Build for simulator
+        run: |
+          xcodebuild -workspace AlnurIPTV.xcworkspace -scheme AlnurIPTV -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build > sim-build.log 2>&1 || { grep -E "error:" sim-build.log | sort -u | head -60; tail -30 sim-build.log; exit 1; }
+      - name: Run app in simulator against mock server
+        run: |
+          echo "127.0.0.1 iptv-mock.test" | sudo tee -a /etc/hosts
+          sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder || true
+          node test/mock.js > mock.log 2>&1 &
+          sleep 2
+          SIM_OS=iOS-18 test/simtest.sh build/Build/Products/Debug-iphonesimulator/AlnurIPTV.app 2>&1 | tee simtest.txt
+          cp mock.log simtest.txt simout/
+      - name: Upload screenshots
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd simout || exit 0
+          T="simtest-${{ github.ref_name }}"
+          gh release delete "$T" -y --cleanup-tag || true
+          gh release create "$T" *.png *.log *.txt --prerelease --title "Simulator test (latest)" --notes "Screenshots from the CI simulator test" --target "${{ github.sha }}"
+
+  glass:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pick newest Xcode (26 = Liquid Glass)
+        run: |
+          ls -d /Applications/Xcode*.app || true
           X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$X" ]; then sudo xcode-select -s "$X"; fi
           xcodebuild -version
@@ -94,7 +134,7 @@ jobs:
           sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder || true
           node test/mock.js > mock.log 2>&1 &
           sleep 2
-          test/simtest.sh build/Build/Products/Debug-iphonesimulator/AlnurIPTV.app 2>&1 | tee simtest.txt
+          SIM_OS=iOS-26 MODE=glass test/simtest.sh build/Build/Products/Debug-iphonesimulator/AlnurIPTV.app 2>&1 | tee simtest.txt
           cp mock.log simtest.txt simout/
       - name: Upload screenshots
         if: always()
@@ -102,6 +142,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd simout || exit 0
-          T="simtest-${{ github.ref_name }}"
+          T="glass-${{ github.ref_name }}"
           gh release delete "$T" -y --cleanup-tag || true
           gh release create "$T" *.png *.log *.txt --prerelease --title "Simulator test (latest)" --notes "Screenshots from the CI simulator test" --target "${{ github.sha }}"

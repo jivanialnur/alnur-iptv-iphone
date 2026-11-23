@@ -429,6 +429,7 @@ struct PlayerScreen: View {
 
     private func scheduleHide() {
         hideTask?.cancel()
+        if UserDefaults.standard.bool(forKey: "uitest_keep_controls") { return }
         hideTask = Task {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             if !Task.isCancelled && !scrubbing && !showGuide && pc.error == nil {

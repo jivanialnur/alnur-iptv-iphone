@@ -6,8 +6,11 @@ APP="$1"; BID=com.alnur.iptvplayer
 OUT=simout; mkdir -p $OUT
 UDID=$(xcrun simctl list devices available -j | python3 -c "
 import json,sys; d=json.load(sys.stdin)['devices']
-c=[x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone') and 'Pro' in x['name'] and 'Max' not in x['name']]
-print(c[-1]['udid'])")
+import os
+want=os.environ.get('SIM_OS','')
+keys=sorted([k for k in d if 'iOS' in k and want in k]) or sorted([k for k in d if 'iOS' in k])
+c=[x for k in keys for x in d[k] if x['name'].startswith('iPhone') and 'Pro' in x['name'] and 'Max' not in x['name']]
+print(c[-1]['udid'], file=sys.stdout)")
 echo "simulator $UDID"
 xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
 xcrun simctl install "$UDID" "$APP"
@@ -25,6 +28,16 @@ run() { # name seconds args... ; screenshot at the end
 stop() { xcrun simctl terminate "$UDID" $BID 2>/dev/null; sleep 2; }
 
 LOGIN="http://iptv-mock.test:8899|demo|demo"
+if [ "${MODE:-full}" = glass ]; then
+  # iOS 26 simulator (Liquid Glass) is slow on Intel: just screenshots of the player controls
+  run g1_login 120 -uitest_reset YES -uitest_login "$LOGIN"; stop
+  run g2_landscape 60 -uitest_play live:1001 -uitest_keep_controls YES
+  sleep 2; stop
+  run g3_portrait 60 -uitest_play live:1004 -uitest_keep_controls YES -uitest_portrait_after 30
+  stop
+  run g4_movie 60 -uitest_play movie:5000 -uitest_keep_controls YES; stop
+  sleep 1; cp "$LOG" $OUT/app.log; echo "glass screenshots done"; exit 0
+fi
 run 01_live 25 -uitest_reset YES -uitest_login "$LOGIN"; stop
 run 01b_search 10 -uitest_search Gujarati; stop
 run 02_movies 10 -uitest_tab movie; stop
