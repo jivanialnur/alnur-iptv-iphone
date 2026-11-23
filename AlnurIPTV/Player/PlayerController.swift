@@ -55,6 +55,16 @@ final class PlayerController: ObservableObject {
         }
         play(index: index)
         loadSeriesQueueIfNeeded()
+        if UITest.nextAfter > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + UITest.nextAfter) { [weak self] in dlog("test: next"); self?.next() }
+        }
+        if UITest.seekTo > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+                guard let self else { return }
+                dlog("test: seek to \(UITest.seekTo) (len \(self.lengthMs))")
+                self.player.time = VLCTime(int: Int32(UITest.seekTo * 1000))
+            }
+        }
     }
 
     func stop() {
@@ -102,6 +112,7 @@ final class PlayerController: ObservableObject {
         media.addOption(":live-caching=\(app.settings.caching)")
         media.addOption(":http-reconnect")
         if let s = startAt, s > 5 { media.addOption(":start-time=\(Int(s))") }
+        dlog("open \(current.kind.rawValue) \(current.sid) ua=\(ua) try=\(attempt) start=\(startAt ?? 0)")
         player.media = media
         gotVideo = false
         openedAt = Date()
@@ -118,6 +129,7 @@ final class PlayerController: ObservableObject {
         if !gotVideo && (player.hasVideoOut || (t > 0 && player.isPlaying)) {
             gotVideo = true
             status = nil
+            dlog("PLAYING \(current.sid) video=\(player.hasVideoOut) size=\(Int(player.videoSize.width))x\(Int(player.videoSize.height)) audio=\(audioTracks.map { $0.name }) subs=\(subtitleTracks.map { $0.name })")
             let uas = uaList
             app.setStreamUA(uas[min(uaIdx, uas.count - 1)])
         }
@@ -147,7 +159,9 @@ final class PlayerController: ObservableObject {
         if wasPlaying { attempt = 0 }
         attempt += 1
         if attempt > 4 { uaIdx += 1; attempt = 1 }
+        dlog("fail \(current.sid) state=\(player.state.rawValue) attempt=\(attempt) ua#\(uaIdx)")
         if uaIdx >= uaList.count {
+            dlog("GIVE UP \(current.sid)")
             status = nil
             error = isLive
                 ? "Aa channel chali nathi rahyo.\nServer busy hoy (1 connection – PC / tablet bandh karo) athva channel source par kharab chhe."
@@ -180,6 +194,7 @@ final class PlayerController: ObservableObject {
     }
 
     private func ended() {
+        dlog("ended \(current.sid)")
         finished = true
         saveProgress(force: true)
         if current.kind == .episode && canNext && app.settings.autoNext {
@@ -203,6 +218,7 @@ final class PlayerController: ObservableObject {
         lastSave = Date()
         guard current.kind == .movie || current.kind == .episode, lengthMs > 0, timeMs > 0 else { return }
         let pos = force && finished ? Double(lengthMs) / 1000 : Double(timeMs) / 1000
+        dlog("save pos \(current.sid) \(Int(pos))/\(lengthMs / 1000)")
         app.setPosition(current, pos: pos, dur: Double(lengthMs) / 1000)
     }
 

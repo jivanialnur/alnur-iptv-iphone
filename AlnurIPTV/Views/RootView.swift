@@ -22,6 +22,14 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut, value: app.toast)
+        .task {
+            if app.account == nil, let l = UITest.login {
+                let p = l.components(separatedBy: "|")
+                if p.count == 3 {
+                    do { try await app.login(url: p[0], user: p[1], pass: p[2]) } catch { dlog("login failed: \(error.localizedDescription)") }
+                }
+            }
+        }
         .fullScreenCover(item: $app.player) { req in
             PlayerScreen(app: app, request: req).environmentObject(app)
         }
@@ -30,21 +38,31 @@ struct RootView: View {
 
 struct MainTabs: View {
     @EnvironmentObject var app: AppState
+    @State private var tab = UITest.tab ?? "live"
 
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             BrowseView(kind: .live)
-                .tabItem { Label("Live", systemImage: "tv") }
+                .tabItem { Label("Live", systemImage: "tv") }.tag("live")
             BrowseView(kind: .movie)
-                .tabItem { Label("Movies", systemImage: "film") }
+                .tabItem { Label("Movies", systemImage: "film") }.tag("movie")
             BrowseView(kind: .series)
-                .tabItem { Label("Series", systemImage: "play.rectangle.on.rectangle") }
+                .tabItem { Label("Series", systemImage: "play.rectangle.on.rectangle") }.tag("series")
             LibraryView()
-                .tabItem { Label("Library", systemImage: "books.vertical") }
+                .tabItem { Label("Library", systemImage: "books.vertical") }.tag("library")
             SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tabItem { Label("Settings", systemImage: "gearshape") }.tag("settings")
         }
         .task { await app.refreshAccount() }
+        .task {
+            guard let t = UITest.parse(UITest.play) else { return }
+            let (k, id) = t
+            await app.ensure(k)
+            guard let it = app.lists[k]?.items.first(where: { $0.sid == id }) else { dlog("autoplay: \(id) not found"); return }
+            let q = app.items(k, cat: it.cat)
+            dlog("autoplay \(it.name)")
+            app.play(q, index: q.firstIndex(of: it) ?? 0)
+        }
     }
 }
 

@@ -12,9 +12,10 @@ struct BrowseView: View {
     let kind: Kind
     @State private var query = ""
     @State private var results: [Item] = []
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                     Section(results.isEmpty ? "Kai malyu nahi" : "\(results.count >= 300 ? "300+" : String(results.count)) results") {
@@ -33,7 +34,10 @@ struct BrowseView: View {
             .navigationDestination(for: CatRoute.self) { r in CategoryView(route: r) }
             .navigationDestination(for: Item.self) { it in DetailView(item: it) }
             .overlay { stateOverlay }
-            .task { await app.ensure(kind) }
+            .task {
+                await app.ensure(kind)
+                if let t = UITest.parse(UITest.open), t.0 == kind, let it = app.lists[kind]?.items.first(where: { $0.sid == t.1 }) { path.append(it) }
+            }
             .task(id: query) { await search() }
         }
     }

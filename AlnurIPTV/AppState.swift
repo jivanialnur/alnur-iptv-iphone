@@ -24,6 +24,10 @@ final class AppState: ObservableObject {
     static let listMaxAge: TimeInterval = 12 * 3600
 
     init() {
+        if UITest.reset, let b = Bundle.main.bundleIdentifier {
+            ud.removePersistentDomain(forName: b)
+            try? FileManager.default.removeItem(at: listDir)
+        }
         account = load("account")
         info = load("info") ?? AccountInfo()
         settings = load("settings") ?? AppSettings()
@@ -63,6 +67,7 @@ final class AppState: ObservableObject {
         var acc = Account(url: Xtream.normBase(url), username: user.trimmingCharacters(in: .whitespaces), password: pass)
         let r = try await Xtream.login(acc)
         acc.apiUA = r.ua
+        dlog("login ok, api UA = \(r.ua)")
         if account?.url != acc.url || account?.username != acc.username { clearLists() }
         account = acc
         info = Xtream.accountInfo(r.info)
@@ -137,6 +142,7 @@ final class AppState: ObservableObject {
         defer { loading.remove(kind) }
         do {
             let d = try await Xtream.fetchList(kind, acc: acc, ua: acc.apiUA ?? API_UAS[0])
+            dlog("list \(kind.rawValue): \(d.items.count) items, \(d.cats.count) cats")
             guard account == acc || account?.url == acc.url else { return }
             let old = lists[kind]?.items.count ?? 0
             lists[kind] = d
@@ -144,6 +150,7 @@ final class AppState: ObservableObject {
             Task.detached(priority: .background) { if let data = try? JSONEncoder().encode(d) { try? data.write(to: file, options: .atomic) } }
             if quiet, old > 0, d.items.count > old { show("🆕 \(d.items.count - old) navi \(kind.title.lowercased()) aavi") }
         } catch {
+            dlog("list \(kind.rawValue) failed: \(error.localizedDescription)")
             if !quiet || lists[kind] == nil { errors[kind] = error.localizedDescription }
         }
     }

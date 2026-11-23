@@ -56,3 +56,33 @@ jobs:
           gh release create "v${VER}-b${{ github.run_number }}" AlnurIPTV-*.ipa \
             --title "Alnur IPTV ${VER} (build ${{ github.run_number }})" \
             --notes "Unsigned IPA – install with Sideloadly (free Apple ID). Re-install every 7 days." --latest
+
+  simtest:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate project + pods
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          pod install --repo-update
+      - name: Build for simulator
+        run: |
+          xcodebuild -workspace AlnurIPTV.xcworkspace -scheme AlnurIPTV -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build > sim-build.log 2>&1 || { grep -E "error:" sim-build.log | sort -u | head -60; tail -30 sim-build.log; exit 1; }
+      - name: Run app in simulator against mock server
+        run: |
+          node test/mock.js > mock.log 2>&1 &
+          sleep 2
+          test/simtest.sh build/Build/Products/Debug-iphonesimulator/AlnurIPTV.app 2>&1 | tee simtest.txt
+          cp mock.log simtest.txt simout/
+      - name: Upload screenshots
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd simout || exit 0
+          gh release delete simtest -y --cleanup-tag || true
+          gh release create simtest *.png *.log *.txt --prerelease --title "Simulator test (latest)" --notes "Screenshots from the CI simulator test" --target "${{ github.sha }}"
