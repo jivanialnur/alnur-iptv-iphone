@@ -76,6 +76,8 @@ xcrun simctl io "$UDID" screenshot "$OUT/15b_downloads.png" >/dev/null 2>&1; sto
 run 16_play_offline 45 -uitest_log YES -uitest_download movie:5000; stop
 run 09_library 8 -uitest_tab library; stop
 run 10_settings 6 -uitest_tab settings; stop
+run 17_users 25 -uitest_tab settings -uitest_add_user "Bhai|http://iptv-mock.test:8899|bhai|demo"
+xcrun simctl io "$UDID" screenshot "$OUT/17b_users.png" >/dev/null 2>&1; stop
 
 sleep 1; cp "$LOG" $OUT/app.log
 echo; echo "==== RESULTS"
@@ -112,6 +114,7 @@ grep -q "double tap right +10 (total 10)" /tmp/tp.txt && grep -q "double tap rig
 grep -q "rate 2.0" /tmp/tp.txt && grep -q "rate 1.0" /tmp/tp.txt && echo "PASS  hold right: 2x speed, back to normal on release" || echo "FAIL  hold 2x"
 B=$(grep -o "buffer 5000: time [0-9]*s, loaded to [0-9]*s (ahead [0-9]*s)" $OUT/app.log | tail -1)
 echo "$B" | awk '{ split($4,t,"s"); split($7,l,"s"); exit !(l[1] > t[1] + 2) }' && echo "PASS  movie grey buffer bar ahead of play ($B)" || echo "FAIL  buffer bar ($B)"
+grep -q "users now: \[\"demo\", \"Bhai\"\] current=Bhai" $OUT/app.log && grep -q "after switch: current=demo" $OUT/app.log && echo "PASS  second user added, switch back works" || echo "FAIL  users ($(grep -o 'users now.*\|after switch.*' $OUT/app.log | tr '\n' ' '))"
 grep -q "player: to portrait" $OUT/app.log && echo "PASS  X in landscape turns to portrait (see 06b_portrait.png)" || echo "FAIL  to portrait"
 grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"
 grep -q "PLAYING 1003" $OUT/app.log && echo "PASS  close player + open other channel" || echo "FAIL  close + reopen"

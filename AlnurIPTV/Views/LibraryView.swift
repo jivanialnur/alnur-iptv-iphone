@@ -55,11 +55,37 @@ struct LibraryView: View {
 struct SettingsView: View {
     @EnvironmentObject var app: AppState
     @State private var confirmLogout = false
+    @State private var addUser = false
     @State private var refreshing = false
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    ForEach(app.accounts, id: \.key) { a in
+                        Button {
+                            app.switchTo(a)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "person.crop.circle.fill").font(.title2)
+                                    .foregroundStyle(a.key == app.account?.key ? Color.accentColor : .secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(a.title).foregroundStyle(.primary)
+                                    Text("\(a.username) · \(URL(string: a.url)?.host ?? a.url)").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if a.key == app.account?.key { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                            }
+                        }
+                        .swipeActions {
+                            Button(role: .destructive) { app.removeAccount(a) } label: { Label("Kadho", systemImage: "trash") }
+                        }
+                    }
+                    Button { addUser = true } label: { Label("Navo user umero", systemImage: "person.badge.plus") }
+                } header: { Text("Users") } footer: {
+                    Text("User par tap karo = e user par badlo. Dar user na favourites ane continue watching alag rahe chhe.")
+                }
+
                 if let a = app.account {
                     Section("Account") {
                         LabeledContent("Server", value: URL(string: a.url)?.host ?? a.url)
@@ -115,6 +141,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $addUser) { LoginView(addingUser: true).environmentObject(app) }
             .task { for k in [Kind.live, .movie, .series] { await app.ensure(k) } }
             .confirmationDialog("Logout karvu? Saved lists kadhi nakhashe (favourites rehse).", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Logout", role: .destructive) { app.logout() }

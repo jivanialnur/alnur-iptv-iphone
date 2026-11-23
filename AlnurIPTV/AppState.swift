@@ -32,13 +32,64 @@ final class AppState: ObservableObject {
         account = load("account")
         info = load("info") ?? AccountInfo()
         settings = load("settings") ?? AppSettings()
-        favs = load("favs") ?? []
-        playCount = load("playCount") ?? [:]
-        played = load("played") ?? [:]
-        positions = load("positions") ?? [:]
-        durations = load("durations") ?? [:]
-        cont = load("cont") ?? []
-        recent = load("recent") ?? []
+        accounts = load("accounts") ?? (account.map { [$0] } ?? [])
+        migrateLegacyProfile()
+        loadProfile()
+    }
+
+    // MARK: users (several accounts; favourites / history are kept per user)
+    @Published var accounts: [Account] = []
+    private var pk: String { account.map { $0.key + "|" } ?? "" }
+    private static let profileKeys = ["favs", "playCount", "played", "positions", "durations", "cont", "recent"]
+
+    /// data saved before users existed belongs to the first user
+    private func migrateLegacyProfile() {
+        guard account != nil else { return }
+        for k in Self.profileKeys where ud.data(forKey: k) != nil && ud.data(forKey: pk + k) == nil {
+            ud.set(ud.data(forKey: k), forKey: pk + k)
+            ud.removeObject(forKey: k)
+        }
+    }
+
+    private func loadProfile() {
+        favs = load(pk + "favs") ?? []
+        playCount = load(pk + "playCount") ?? [:]
+        played = load(pk + "played") ?? [:]
+        positions = load(pk + "positions") ?? [:]
+        durations = load(pk + "durations") ?? [:]
+        cont = load(pk + "cont") ?? []
+        recent = load(pk + "recent") ?? []
+    }
+
+    private func psave<T: Encodable>(_ key: String, _ v: T) { save(pk + key, v) }
+
+    private func rememberAccount(_ acc: Account) {
+        if let i = accounts.firstIndex(where: { $0.key == acc.key }) { accounts[i] = acc } else { accounts.append(acc) }
+        save("accounts", accounts)
+    }
+
+    /// Switch to another saved user.
+    func switchTo(_ acc: Account) {
+        guard acc.key != account?.key else { return }
+        if player != nil { closePlayer() }
+        dlog("switch user → \(acc.key)")
+        account = acc
+        save("account", acc)
+        accountChecked = false
+        info = AccountInfo()
+        clearLists()
+        loadProfile()
+        show("👤 \(acc.title)")
+        Task { await refreshAccount(); await ensure(.live) }
+    }
+
+    func removeAccount(_ acc: Account) {
+        accounts.removeAll { $0.key == acc.key }
+        save("accounts", accounts)
+        for k in Self.profileKeys { ud.removeObject(forKey: acc.key + "|" + k) }
+        if acc.key == account?.key {
+            if let other = accounts.first { switchTo(other) } else { logout() }
+        }
     }
 
     // MARK: storage
@@ -75,13 +126,18 @@ final class AppState: ObservableObject {
     }
 
     // MARK: login
-    func login(url: String, user: String, pass: String) async throws {
+    func login(url: String, user: String, pass: String, name: String? = nil) async throws {
         var acc = Account(url: Xtream.normBase(url), username: user.trimmingCharacters(in: .whitespaces), password: pass)
+        acc.name = name?.trimmingCharacters(in: .whitespaces)
         let r = try await Xtream.login(acc)
         acc.apiUA = r.ua
         dlog("login ok, api UA = \(r.ua)")
-        if account?.url != acc.url || account?.username != acc.username { clearLists() }
+        let changed = account?.key != acc.key
+        if changed { if player != nil { closePlayer() }; clearLists() }
         account = acc
+        rememberAccount(acc)
+        if changed { accountChecked = true; loadProfile() }
+        dlog("accounts: \(accounts.count)")
         info = Xtream.accountInfo(r.info)
         offline = false
         save("account", acc); save("info", info)
@@ -96,7 +152,7 @@ final class AppState: ObservableObject {
         accountChecked = true
         do {
             let r = try await Xtream.login(acc)
-            if acc.apiUA != r.ua { acc.apiUA = r.ua; account = acc; save("account", acc) }
+            if acc.apiUA != r.ua { acc.apiUA = r.ua; account = acc; save("account", acc); rememberAccount(acc) }
             info = Xtream.accountInfo(r.info); save("info", info)
             offline = false
             fixFormat()
@@ -116,6 +172,8 @@ final class AppState: ObservableObject {
 
     func logout() {
         accountChecked = false
+        if let a = account { accounts.removeAll { $0.key == a.key }; save("accounts", accounts) }
+        if let other = accounts.first { account = nil; switchTo(other); return }
         account = nil
         ud.removeObject(forKey: "account")
         clearLists()
@@ -130,7 +188,7 @@ final class AppState: ObservableObject {
 
     func setStreamUA(_ ua: String) {
         guard var a = account, a.streamUA != ua else { return }
-        a.streamUA = ua; account = a; save("account", a)
+        a.streamUA = ua; account = a; save("account", a); rememberAccount(a)
     }
 
     // MARK: lists
@@ -194,7 +252,7 @@ final class AppState: ObservableObject {
     func toggleFav(_ it: Item) {
         if let i = favs.firstIndex(where: { $0.id == it.id }) { favs.remove(at: i); show("Favourites mathi kadhyu") }
         else { favs.insert(it, at: 0); show("Favourites ma umeryu ★") }
-        save("favs", favs)
+        psave("favs", favs)
     }
 
     func recordPlay(_ it: Item) {
@@ -203,7 +261,7 @@ final class AppState: ObservableObject {
         recent.removeAll { $0.id == it.id }
         recent.insert(it, at: 0)
         if recent.count > 60 { recent.removeLast(recent.count - 60) }
-        save("playCount", playCount); save("played", played); save("recent", recent)
+        psave("playCount", playCount); psave("played", played); psave("recent", recent)
     }
 
     func mostWatched(_ kind: Kind, limit: Int = 10) -> [Item] {
@@ -224,7 +282,7 @@ final class AppState: ObservableObject {
             cont.insert(it, at: 0)
             if cont.count > 40 { cont.removeLast(cont.count - 40) }
         }
-        save("positions", positions); save("durations", durations); save("cont", cont)
+        psave("positions", positions); psave("durations", durations); psave("cont", cont)
     }
 
     func progress(_ it: Item) -> Double? {
@@ -234,11 +292,11 @@ final class AppState: ObservableObject {
 
     func removeCont(_ it: Item) {
         cont.removeAll { $0.id == it.id }; positions[it.id] = nil
-        save("cont", cont); save("positions", positions)
+        psave("cont", cont); psave("positions", positions)
     }
     func clearHistory() {
         cont = []; recent = []; positions = [:]; playCount = [:]; played = [:]
-        save("cont", cont); save("recent", recent); save("positions", positions); save("playCount", playCount); save("played", played)
+        psave("cont", cont); psave("recent", recent); psave("positions", positions); psave("playCount", playCount); psave("played", played)
     }
 
     // MARK: play

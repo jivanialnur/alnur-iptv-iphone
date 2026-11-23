@@ -53,6 +53,16 @@ struct MainTabs: View {
         }
         .task { await app.refreshAccount() }
         .task {
+            if let u = UserDefaults.standard.string(forKey: "uitest_add_user") {
+                let p = u.components(separatedBy: "|")
+                let first = app.account
+                do { try await app.login(url: p[1], user: p[2], pass: p[3], name: p[0]) } catch { dlog("add user failed \(error.localizedDescription)") }
+                dlog("users now: \(app.accounts.map { $0.title }) current=\(app.account?.title ?? "-")")
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                if let f = first { app.switchTo(f) }
+                dlog("after switch: current=\(app.account?.title ?? "-") favs=\(app.favs.count)")
+                return
+            }
             if let t = UITest.parse(UserDefaults.standard.string(forKey: "uitest_download")) {
                 await app.ensure(t.0)
                 if let it = app.lists[t.0]?.items.first(where: { $0.sid == t.1 }) {
@@ -86,6 +96,10 @@ struct MainTabs: View {
 
 struct LoginView: View {
     @EnvironmentObject var app: AppState
+    @Environment(\.dismiss) private var dismiss
+    /// true = opened from Settings → "+ Navo user umero"
+    var addingUser = false
+    @State private var name = ""
     @State private var server = ""
     @State private var user = ""
     @State private var pass = ""
@@ -106,6 +120,7 @@ struct LoginView: View {
                 .listRowBackground(Color.clear)
 
                 Section("Account") {
+                    TextField("Naam (jem ke Ghar, Bhai) – marji mujab", text: $name)
                     TextField("Server URL", text: $server)
                         .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     TextField("Username", text: $user)
@@ -129,14 +144,18 @@ struct LoginView: View {
                     if let msg { Text(msg).foregroundStyle(.red) }
                 }
             }
-            .navigationTitle("Login")
+            .navigationTitle(addingUser ? "Navo user" : "Login")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar { if addingUser { Button("Cancel") { dismiss() } } }
         }
     }
 
     private func doLogin() async {
         busy = true; msg = nil
-        do { try await app.login(url: server, user: user, pass: pass) }
+        do {
+            try await app.login(url: server, user: user, pass: pass, name: name)
+            if addingUser { dismiss() }
+        }
         catch { msg = "Login failed: " + error.localizedDescription }
         busy = false
     }

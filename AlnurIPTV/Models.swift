@@ -54,6 +54,11 @@ struct Account: Codable, Equatable {
     var password: String
     var apiUA: String?
     var streamUA: String?
+    var name: String?
+
+    /// one user = one username on one server
+    var key: String { "\(username)@\(URL(string: url)?.host ?? url)" }
+    var title: String { (name?.isEmpty == false ? name! : username) }
 }
 
 struct AccountInfo: Codable, Equatable {
