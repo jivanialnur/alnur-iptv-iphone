@@ -121,6 +121,7 @@ struct SeriesDetail: View {
                 let eps = info.seasons.first { $0.name == season }?.episodes ?? []
                 Section("Episodes") {
                     ForEach(eps) { ep in
+                      HStack(spacing: 8) {
                         Button {
                             let all = allEpisodes
                             app.play(all, index: all.firstIndex(of: ep) ?? 0)
@@ -138,7 +139,11 @@ struct SeriesDetail: View {
                             }
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.primary)
+                        Spacer(minLength: 0)
+                        EpisodeDownloadIcon(item: ep)
+                      }
                         .swipeActions { Button { app.download(ep) } label: { Label("Download", systemImage: "arrow.down.circle") }.tint(.blue) }
                         .contextMenu { Button { app.download(ep) } label: { Label("Download", systemImage: "arrow.down.circle") } }
                     }
@@ -199,5 +204,38 @@ struct DownloadButton: View {
         }
         .buttonStyle(.bordered)
         .disabled(e?.state == .done)
+    }
+}
+
+/// Small download button on each episode row: ⬇ / % while loading / ✓ when on the iPhone.
+struct EpisodeDownloadIcon: View {
+    @EnvironmentObject var app: AppState
+    @ObservedObject var dl = Downloads.shared
+    let item: Item
+
+    var body: some View {
+        let e = dl.entry(for: item)
+        Button {
+            if e?.state != .running && e?.state != .done { app.download(item) }
+        } label: {
+            Group {
+                switch e?.state {
+                case .running?, .waiting?:
+                    ZStack {
+                        Circle().stroke(Color.secondary.opacity(0.3), lineWidth: 3)
+                        Circle().trim(from: 0, to: e?.progress ?? 0).stroke(Color.accentColor, lineWidth: 3).rotationEffect(.degrees(-90))
+                    }
+                    .frame(width: 24, height: 24)
+                case .done?: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                case .failed?: Image(systemName: "arrow.clockwise.circle").foregroundStyle(.orange)
+                default: Image(systemName: "arrow.down.circle").foregroundStyle(Color.accentColor)
+                }
+            }
+            .font(.title2)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Download")
     }
 }

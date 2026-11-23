@@ -221,6 +221,7 @@ struct PlayerScreen: View {
                     }
                 } else {
                     if pc.recording { Text(recTitle).font(.caption.bold()).foregroundStyle(.red).padding(.horizontal, 10).frame(height: 30).glass(Capsule(), interactive: false) }
+                    if !pc.isLive { GlassIcon(system: "arrow.down.circle", label: "Download") { app.download(pc.current) } }
                     moreMenu
                 }
             }
