@@ -179,7 +179,7 @@ struct PlayerScreen: View {
         VStack(spacing: 0) {
             // top: back · title / category · actions
             HStack(alignment: .center, spacing: 10) {
-                GlassIcon(system: landscape ? "chevron.down" : "xmark", label: landscape ? "Ubhu (vertical) karo" : "Bandh karo") { landscape ? toPortrait() : close() }
+                GlassIcon(system: landscape ? "chevron.down" : "xmark", label: landscape ? "Portrait" : "Close") { landscape ? toPortrait() : close() }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(titleText).font(.system(size: 16, weight: .bold)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     let cat = pc.categoryName
@@ -210,7 +210,7 @@ struct PlayerScreen: View {
                 progressRow
                 if landscape {
                     HStack(spacing: 10) {
-                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute / avaaj") { pc.toggleMute(); scheduleHide() }
+                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute / sound") { pc.toggleMute(); scheduleHide() }
                         Spacer(minLength: 4)
                         GlassIcon(system: aspectIcon, label: "Screen size: \(pc.aspect.title)") { pc.cycleAspect(); scheduleHide() }
                         transport(big: false)
@@ -219,11 +219,11 @@ struct PlayerScreen: View {
                         settingsMenu
                         Spacer(minLength: 4)
                         if pc.pipAvailable { GlassIcon(system: "pip.enter", label: "Nani window (PiP)") { pc.startPiP() } }
-                        GlassIcon(system: "arrow.down.right.and.arrow.up.left", label: "Ubhu (vertical) karo") { toPortrait() }
+                        GlassIcon(system: "arrow.down.right.and.arrow.up.left", label: "Portrait") { toPortrait() }
                     }
                 } else {
                     HStack(spacing: 4) {
-                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 40, label: "Mute / avaaj") { pc.toggleMute(); scheduleHide() }
+                        GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 40, label: "Mute / sound") { pc.toggleMute(); scheduleHide() }
                         GlassIcon(system: aspectIcon, size: 40, label: "Screen size: \(pc.aspect.title)") { pc.cycleAspect(); scheduleHide() }
                         subtitleMenu
                         audioMenu
@@ -266,15 +266,15 @@ struct PlayerScreen: View {
     private func transport(big: Bool) -> some View {
         HStack(spacing: big ? 22 : 10) {
             if pc.queue.count > 1 {
-                GlassIcon(system: "backward.end.fill", size: big ? 52 : 44, label: "Aagalnu") { pc.prev(); scheduleHide() }
+                GlassIcon(system: "backward.end.fill", size: big ? 52 : 44, label: "Previous") { pc.prev(); scheduleHide() }
                     .disabled(!pc.canPrev).opacity(pc.canPrev ? 1 : 0.35)
             }
-            if !pc.isLive { GlassIcon(system: "gobackward.30", size: big ? 52 : 44, label: "30 second pachhal") { pc.skip(-30); scheduleHide() } }
+            if !pc.isLive { GlassIcon(system: "gobackward.30", size: big ? 52 : 44, label: "Back 30 s") { pc.skip(-30); scheduleHide() } }
             GlassIcon(system: pc.isPlaying ? "pause.fill" : "play.fill", size: big ? 76 : 56,
                       font: .system(size: big ? 32 : 24, weight: .bold)) { pc.togglePause(); scheduleHide() }
-            if !pc.isLive { GlassIcon(system: "goforward.30", size: big ? 52 : 44, label: "30 second aagal") { pc.skip(30); scheduleHide() } }
+            if !pc.isLive { GlassIcon(system: "goforward.30", size: big ? 52 : 44, label: "Forward 30 s") { pc.skip(30); scheduleHide() } }
             if pc.queue.count > 1 {
-                GlassIcon(system: "forward.end.fill", size: big ? 52 : 44, label: "Aavtu") { pc.next(); scheduleHide() }
+                GlassIcon(system: "forward.end.fill", size: big ? 52 : 44, label: "Next") { pc.next(); scheduleHide() }
                     .disabled(!pc.canNext).opacity(pc.canNext ? 1 : 0.35)
             }
         }
@@ -335,13 +335,13 @@ struct PlayerScreen: View {
     private var moreMenu: some View {
         Menu {
             Button { app.toggleFav(pc.current) } label: {
-                Label(app.isFav(pc.current) ? "Favourites mathi kadho" : "Favourites ma umero", systemImage: app.isFav(pc.current) ? "star.fill" : "star")
+                Label(app.isFav(pc.current) ? "Remove from Favourites" : "Add to Favourites", systemImage: app.isFav(pc.current) ? "star.fill" : "star")
             }
             if pc.isLive {
-                Button { pc.toggleRecording() } label: { Label(pc.recording ? "Recording bandh karo" : "Record karo", systemImage: "record.circle") }
+                Button { pc.toggleRecording() } label: { Label(pc.recording ? "Stop recording" : "Record", systemImage: "record.circle") }
                 Button { showGuide = true } label: { Label("TV Guide", systemImage: "info.circle") }
             }
-            Button { pc.copyLink() } label: { Label("Link copy karo", systemImage: "link") }
+            Button { pc.copyLink() } label: { Label("Copy link", systemImage: "link") }
             if !pc.isLive { Button { app.download(pc.current) } label: { Label("Download", systemImage: "arrow.down.circle") } }
             Button { pc.openInVLC() } label: { Label("Open in VLC", systemImage: "arrow.up.forward.app") }
         } label: { GlassMenuLabel(system: "ellipsis") }
@@ -350,7 +350,7 @@ struct PlayerScreen: View {
     private var subtitleMenu: some View {
         Menu {
             let s = pc.subtitleTracks
-            if s.isEmpty { Text("Subtitle nathi") }
+            if s.isEmpty { Text("No subtitles") }
             ForEach(s) { t in
                 Button { pc.setSub(t.id) } label: { Label(t.name, systemImage: t.id == pc.currentSub ? "checkmark" : "captions.bubble") }
             }
@@ -360,7 +360,7 @@ struct PlayerScreen: View {
     private var audioMenu: some View {
         Menu {
             let a = pc.audioTracks
-            if a.isEmpty { Text("Audio track nathi") }
+            if a.isEmpty { Text("No audio tracks") }
             ForEach(a) { t in
                 Button { pc.setAudio(t.id) } label: { Label(t.name, systemImage: t.id == pc.currentAudio ? "checkmark" : "speaker.wave.2") }
             }
@@ -376,9 +376,9 @@ struct PlayerScreen: View {
                     }
                 }
             }
-            Menu(pc.sleepAt == nil ? "Sleep timer" : "Sleep timer (chalu)") {
+            Menu(pc.sleepAt == nil ? "Sleep timer" : "Sleep timer (on)") {
                 ForEach([0, 15, 30, 60, 90], id: \.self) { m in
-                    Button { pc.setSleep(minutes: m) } label: { Text(m == 0 ? "Bandh" : "\(m) minute") }
+                    Button { pc.setSleep(minutes: m) } label: { Text(m == 0 ? "Off" : "\(m) min") }
                 }
             }
             Menu("Screen: \(pc.aspect.title)") {
@@ -394,9 +394,9 @@ struct PlayerScreen: View {
             Image(systemName: "exclamationmark.triangle.fill").font(.largeTitle).foregroundStyle(.yellow)
             Text(e).multilineTextAlignment(.center).foregroundStyle(.white)
             HStack(spacing: 12) {
-                Button("Fari try karo") { pc.retry() }.buttonStyle(.borderedProminent)
+                Button("Try again") { pc.retry() }.buttonStyle(.borderedProminent)
                 if pc.isLive && pc.canNext { Button("Next channel") { pc.next() }.buttonStyle(.bordered).tint(.white) }
-                Button("Bandh karo") { close() }.buttonStyle(.bordered).tint(.white)
+                Button("Close") { close() }.buttonStyle(.bordered).tint(.white)
             }
         }
         .padding(24)
@@ -411,9 +411,9 @@ struct PlayerScreen: View {
             HStack {
                 Spacer()
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Next episode \(n) sec ma…").foregroundStyle(.white).font(.callout.bold())
+                    Text("Next episode in \(n) s…").foregroundStyle(.white).font(.callout.bold())
                     HStack {
-                        Button("Have j jovo") { pc.cancelAutoNext(); pc.next() }.buttonStyle(.borderedProminent)
+                        Button("Play now") { pc.cancelAutoNext(); pc.next() }.buttonStyle(.borderedProminent)
                         Button("Cancel") { pc.cancelAutoNext() }.buttonStyle(.bordered).tint(.white)
                     }
                 }
@@ -491,10 +491,10 @@ struct PlayerScreen: View {
         dlog("middle swipe \(up ? "up" : "down") landscape=\(landscape)")
         if up {
             if !landscape { toLandscape() }
-            else if pc.aspect != .fill { pc.aspect = .fill; pc.applyAspect(); pc.say("Zoom: aakhi screen") }
+            else if pc.aspect != .fill { pc.aspect = .fill; pc.applyAspect(); pc.say("Zoom: fill screen") }
         } else {
             if landscape {
-                if pc.aspect == .fill { pc.aspect = .fit; pc.applyAspect(); pc.say("Zoom bandh") }
+                if pc.aspect == .fill { pc.aspect = .fit; pc.applyAspect(); pc.say("Zoom off") }
                 else { toPortrait() }
             } else {
                 close()
@@ -618,7 +618,7 @@ struct GuideSheet: View {
             List {
                 if let items {
                     if items.isEmpty {
-                        Text("Aa channel mate server par programme ni mahiti nathi.").foregroundStyle(.secondary)
+                        Text("No programme information for this channel on the server.").foregroundStyle(.secondary)
                     }
                     ForEach(items) { e in
                         VStack(alignment: .leading, spacing: 4) {

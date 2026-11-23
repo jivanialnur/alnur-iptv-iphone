@@ -52,14 +52,14 @@ struct MovieDetail: View {
                     Button {
                         app.removeCont(movie)
                         app.play([movie], index: 0)
-                    } label: { Label("Shuru thi play", systemImage: "backward.end.fill").frame(maxWidth: .infinity) }
+                    } label: { Label("Play from start", systemImage: "backward.end.fill").frame(maxWidth: .infinity) }
                     .buttonStyle(.bordered)
                     .listRowSeparator(.hidden)
                 }
                 DownloadButton(item: movie)
                     .listRowSeparator(.hidden)
                 Button { app.toggleFav(movie) } label: {
-                    Label(app.isFav(movie) ? "Favourites mathi kadho" : "Favourites ma umero", systemImage: app.isFav(movie) ? "star.fill" : "star")
+                    Label(app.isFav(movie) ? "Remove from Favourites" : "Add to Favourites", systemImage: app.isFav(movie) ? "star.fill" : "star")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -105,7 +105,7 @@ struct SeriesDetail: View {
                     .listRowSeparator(.hidden)
                 }
                 Button { app.toggleFav(series) } label: {
-                    Label(app.isFav(series) ? "Favourites mathi kadho" : "Favourites ma umero", systemImage: app.isFav(series) ? "star.fill" : "star")
+                    Label(app.isFav(series) ? "Remove from Favourites" : "Add to Favourites", systemImage: app.isFav(series) ? "star.fill" : "star")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -144,7 +144,7 @@ struct SeriesDetail: View {
                     }
                 }
             } else if let error {
-                Section { Text(error).foregroundStyle(.red); Button("Fari try karo") { Task { await load() } } }
+                Section { Text(error).foregroundStyle(.red); Button("Try again") { Task { await load() } } }
             } else {
                 Section { HStack { Spacer(); ProgressView(); Spacer() } }
             }
@@ -189,9 +189,9 @@ struct DownloadButton: View {
         } label: {
             Group {
                 switch e?.state {
-                case .running?, .waiting?: Label("Download thay chhe… \(Int((e?.progress ?? 0) * 100))%", systemImage: "arrow.down.circle")
-                case .done?: Label("Download thayelu chhe (offline)", systemImage: "checkmark.circle.fill")
-                case .failed?: Label("Download fari try karo", systemImage: "arrow.clockwise.circle")
+                case .running?, .waiting?: Label("Downloading… \(Int((e?.progress ?? 0) * 100))%", systemImage: "arrow.down.circle")
+                case .done?: Label("Downloaded (offline)", systemImage: "checkmark.circle.fill")
+                case .failed?: Label("Retry download", systemImage: "arrow.clockwise.circle")
                 default: Label("Download", systemImage: "arrow.down.circle")
                 }
             }

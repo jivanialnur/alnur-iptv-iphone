@@ -157,7 +157,7 @@ final class AppState: ObservableObject {
             offline = false
             fixFormat()
         } catch XtreamError.auth {
-            show("Account login nathi thatu – Settings ma check karo")
+            show("Account login failed – check Settings")
         } catch {
             offline = true
         }
@@ -222,7 +222,7 @@ final class AppState: ObservableObject {
             lists[kind] = d
             let file = listFile(kind)
             Task.detached(priority: .background) { if let data = try? JSONEncoder().encode(d) { try? data.write(to: file, options: .atomic) } }
-            if quiet, old > 0, d.items.count > old { show("🆕 \(d.items.count - old) navi \(kind.title.lowercased()) aavi") }
+            if quiet, old > 0, d.items.count > old { show("🆕 \(d.items.count - old) new \(kind.title.lowercased())") }
         } catch {
             dlog("list \(kind.rawValue) failed: \(error.localizedDescription)")
             if !quiet || lists[kind] == nil { errors[kind] = error.localizedDescription }
@@ -250,8 +250,8 @@ final class AppState: ObservableObject {
     // MARK: favourites / history
     func isFav(_ it: Item) -> Bool { favs.contains { $0.id == it.id } }
     func toggleFav(_ it: Item) {
-        if let i = favs.firstIndex(where: { $0.id == it.id }) { favs.remove(at: i); show("Favourites mathi kadhyu") }
-        else { favs.insert(it, at: 0); show("Favourites ma umeryu ★") }
+        if let i = favs.firstIndex(where: { $0.id == it.id }) { favs.remove(at: i); show("Removed from Favourites") }
+        else { favs.insert(it, at: 0); show("Added to Favourites ★") }
         psave("favs", favs)
     }
 

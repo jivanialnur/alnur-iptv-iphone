@@ -8,10 +8,10 @@ enum XtreamError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .http(let c):
-            if c == 503 || c == 429 { return "Server busy (HTTP \(c)). 2–3 minute pachhi fari try karo." }
-            if c == 401 || c == 403 { return "Server e na padi (HTTP \(c))." }
+            if c == 503 || c == 429 { return "Server busy (HTTP \(c)). Try again in 2–3 minutes." }
+            if c == 401 || c == 403 { return "Server refused (HTTP \(c))." }
             return "Server error HTTP \(c)"
-        case .auth: return "Username / password khotu chhe"
+        case .auth: return "Wrong username / password"
         case .bad(let m): return m
         }
     }
@@ -99,7 +99,7 @@ enum Xtream {
 
     /// Tries user-agents gently until the server answers. Returns the UA that worked + the account JSON.
     static func login(_ acc: Account) async throws -> (ua: String, info: [String: Any]) {
-        guard let url = apiURL(acc) else { throw XtreamError.bad("Server address kharab chhe") }
+        guard let url = apiURL(acc) else { throw XtreamError.bad("Invalid server address") }
         let order = unique([acc.apiUA] + API_UAS)
         var last: Error = XtreamError.bad("No response")
         for (n, ua) in order.enumerated() {
@@ -110,7 +110,7 @@ enum Xtream {
                     guard str(ui["auth"]) == "1" else { throw XtreamError.auth }
                     return (ua, d)
                 }
-                last = XtreamError.bad("Server e saacho jawab na aapyo (Xtream account nathi?)")
+                last = XtreamError.bad("The server gave no valid answer (not an Xtream account?)")
             } catch XtreamError.auth {
                 throw XtreamError.auth
             } catch {

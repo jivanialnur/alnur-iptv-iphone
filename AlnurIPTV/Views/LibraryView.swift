@@ -30,7 +30,10 @@ struct LibraryView: View {
                         }
                     }
                     Section {
-                        Button("History saaf karo", role: .destructive) { confirmClear = true }
+                        Button("Clear history", role: .destructive) { confirmClear = true }
+                            .confirmationDialog("Clear continue watching, recently watched and most watched?", isPresented: $confirmClear, titleVisibility: .visible) {
+                                Button("Clear", role: .destructive) { app.clearHistory() }
+                            }
                     }
                 }
             }
@@ -38,16 +41,14 @@ struct LibraryView: View {
                 if app.cont.isEmpty && app.favs.isEmpty && app.recent.isEmpty && Downloads.shared.entries.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: "star").font(.largeTitle).foregroundStyle(.secondary)
-                        Text("Haju kai nathi.\nChannel / movie par left swipe karine ★ favourite karo.")
+                        Text("Nothing here yet.\nSwipe left on a channel / movie to add a ★ favourite.")
                             .multilineTextAlignment(.center).foregroundStyle(.secondary).font(.footnote)
                     }
                 }
             }
             .navigationTitle("Library")
             .navigationDestination(for: Item.self) { it in DetailView(item: it) }
-            .confirmationDialog("Continue watching, recently watched ane most watched saaf karvu?", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("Saaf karo", role: .destructive) { app.clearHistory() }
-            }
+
         }
     }
 }
@@ -78,12 +79,12 @@ struct SettingsView: View {
                             }
                         }
                         .swipeActions {
-                            Button(role: .destructive) { app.removeAccount(a) } label: { Label("Kadho", systemImage: "trash") }
+                            Button(role: .destructive) { app.removeAccount(a) } label: { Label("Remove", systemImage: "trash") }
                         }
                     }
-                    Button { addUser = true } label: { Label("Navo user umero", systemImage: "person.badge.plus") }
+                    Button { addUser = true } label: { Label("Add user", systemImage: "person.badge.plus") }
                 } header: { Text("Users") } footer: {
-                    Text("User par tap karo = e user par badlo. Dar user na favourites ane continue watching alag rahe chhe.")
+                    Text("Tap a user to switch. Each user has their own favourites and continue watching.")
                 }
 
                 if let a = app.account {
@@ -112,7 +113,7 @@ struct SettingsView: View {
                     }
                     Toggle("Next episode automatic", isOn: $app.settings.autoNext)
                 } header: { Text("Player") } footer: {
-                    Text("Server ek j connection aape chhe – PC / tablet par chalu hoy to iPhone par stream nahi chale.")
+                    Text("Buffer = how much video is loaded before it starts. 1 s: channels open faster. 3–5 s: fewer stops on slow internet (you notice it mainly on weak Wi-Fi / mobile data). Applies to the next channel or movie you open.\n\nThe server allows only one connection – if the PC / tablet is playing, the iPhone cannot stream.")
                 }
                 .onChange(of: app.settings) { _ in app.saveSettings() }
 
@@ -125,16 +126,19 @@ struct SettingsView: View {
                         Task {
                             for k in [Kind.live, .movie, .series] { await app.ensure(k, force: true) }
                             refreshing = false
-                            app.show("Lists update thai gayi ✅")
+                            app.show("Lists updated ✅")
                         }
                     } label: {
-                        HStack { Text("Badhi lists refresh karo"); Spacer(); if refreshing { ProgressView() } }
+                        HStack { Text("Refresh all lists"); Spacer(); if refreshing { ProgressView() } }
                     }
                     .disabled(refreshing)
                 }
 
                 Section {
                     Button("Logout", role: .destructive) { confirmLogout = true }
+                        .confirmationDialog("Log out? Saved lists will be removed (favourites stay).", isPresented: $confirmLogout, titleVisibility: .visible) {
+                            Button("Logout", role: .destructive) { app.logout() }
+                        }
                 }
                 Section {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
@@ -143,9 +147,7 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .sheet(isPresented: $addUser) { LoginView(addingUser: true).environmentObject(app) }
             .task { for k in [Kind.live, .movie, .series] { await app.ensure(k) } }
-            .confirmationDialog("Logout karvu? Saved lists kadhi nakhashe (favourites rehse).", isPresented: $confirmLogout, titleVisibility: .visible) {
-                Button("Logout", role: .destructive) { app.logout() }
-            }
+
         }
     }
 }

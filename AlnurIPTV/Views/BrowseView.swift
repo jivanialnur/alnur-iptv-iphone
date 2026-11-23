@@ -45,7 +45,7 @@ struct BrowseView: View {
 
     @ViewBuilder private var searchSections: some View {
         if results.isEmpty && catResults.isEmpty {
-            Section { Text("Kai malyu nahi").foregroundStyle(.secondary) }
+            Section { Text("No results").foregroundStyle(.secondary) }
         }
         if !catResults.isEmpty {
             Section("Categories (\(catResults.count))") {
@@ -86,13 +86,13 @@ struct BrowseView: View {
             if app.loading.contains(kind) {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("\(kind.title) download thay chhe…\n(pehli vaar thodi var lage)").multilineTextAlignment(.center).font(.footnote).foregroundStyle(.secondary)
+                    Text("Loading \(kind.title.lowercased())…\n(the first time takes a while)").multilineTextAlignment(.center).font(.footnote).foregroundStyle(.secondary)
                 }
             } else if let e = app.errors[kind] {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(.orange)
                     Text(e).multilineTextAlignment(.center).font(.footnote)
-                    Button("Fari try karo") { Task { await app.ensure(kind, force: true) } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await app.ensure(kind, force: true) } }.buttonStyle(.borderedProminent)
                 }.padding()
             }
         }
@@ -162,7 +162,7 @@ struct CategoryView: View {
                 Button { sortNew.toggle() } label: { Image(systemName: sortNew ? "clock.fill" : "clock") }
             }
         }
-        .overlay { if items.isEmpty { Text("Kai nathi").foregroundStyle(.secondary) } }
+        .overlay { if items.isEmpty { Text("Empty").foregroundStyle(.secondary) } }
     }
 }
 
@@ -189,7 +189,7 @@ struct ItemLink: View {
         }
         .contextMenu {
             Button { app.toggleFav(item) } label: {
-                Label(app.isFav(item) ? "Favourites mathi kadho" : "Favourites ma umero", systemImage: "star")
+                Label(app.isFav(item) ? "Remove from Favourites" : "Add to Favourites", systemImage: "star")
             }
             if item.kind == .live || item.kind == .episode || item.kind == .movie {
                 Button { app.play(queue, index: index) } label: { Label("Play", systemImage: "play.fill") }

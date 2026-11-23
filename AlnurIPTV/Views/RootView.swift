@@ -97,7 +97,7 @@ struct MainTabs: View {
 struct LoginView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.dismiss) private var dismiss
-    /// true = opened from Settings → "+ Navo user umero"
+    /// true = opened from Settings → "+ Add user"
     var addingUser = false
     @State private var name = ""
     @State private var server = ""
@@ -113,14 +113,14 @@ struct LoginView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "play.tv.fill").font(.system(size: 54)).foregroundStyle(.tint)
                         Text("Alnur IPTV").font(.title.bold())
-                        Text("Xtream Codes account thi login karo").font(.footnote).foregroundStyle(.secondary)
+                        Text("Log in with your Xtream Codes account").font(.footnote).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
                 }
                 .listRowBackground(Color.clear)
 
                 Section("Account") {
-                    TextField("Naam (jem ke Ghar, Bhai) – marji mujab", text: $name)
+                    TextField("Name (e.g. Home, Brother) – optional", text: $name)
                     TextField("Server URL", text: $server)
                         .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     TextField("Username", text: $user)
@@ -144,7 +144,7 @@ struct LoginView: View {
                     if let msg { Text(msg).foregroundStyle(.red) }
                 }
             }
-            .navigationTitle(addingUser ? "Navo user" : "Login")
+            .navigationTitle(addingUser ? "New user" : "Login")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { if addingUser { Button("Cancel") { dismiss() } } }
         }

@@ -236,11 +236,11 @@ final class PlayerController: NSObject, ObservableObject {
         guard tok == token else { return }
         retrying = false
         guard let acc = app.account, let url = Downloads.shared.localURL(for: current) ?? Xtream.streamURL(current, acc: acc, format: app.settings.liveFormat) else {
-            error = "Aa item mate link nathi"; status = nil; return
+            error = "No link for this item"; status = nil; return
         }
         let uas = uaList
         let ua = uas[min(uaIdx, uas.count - 1)]
-        guard let media = VLCMedia(url: url) else { error = "Link kharab chhe"; status = nil; return }
+        guard let media = VLCMedia(url: url) else { error = "Invalid link"; status = nil; return }
         media.addOption(":http-user-agent=\(ua)")
         media.addOption(":network-caching=\(app.settings.caching)")
         if !isLive && !url.isFileURL {
@@ -320,8 +320,8 @@ final class PlayerController: NSObject, ObservableObject {
             dlog("GIVE UP \(current.sid)")
             status = nil
             error = isLive
-                ? "Aa channel chali nathi rahyo.\nServer busy hoy (1 connection – PC / tablet bandh karo) athva channel source par kharab chhe."
-                : "Video chali nathi rahyo.\nServer busy hoy (1 connection – PC / tablet bandh karo)."
+                ? "This channel is not playing.\nThe server may be busy (1 connection – close the PC / tablet app) or the channel is down at the source."
+                : "This video is not playing.\nThe server may be busy (1 connection – close the PC / tablet app)."
             vlc { $0.stop() }
             return
         }
@@ -462,7 +462,7 @@ final class PlayerController: NSObject, ObservableObject {
         muted.toggle()
         let m = muted
         vlc { $0.audio?.volume = m ? 0 : 100 }
-        say(m ? "🔇 Mute" : "🔊 Avaaj chalu")
+        say(m ? "🔇 Mute" : "🔊 Sound on")
     }
 
     func cycleAspect() {
@@ -493,7 +493,7 @@ final class PlayerController: NSObject, ObservableObject {
 
     func setSleep(minutes: Int) {
         sleepAt = minutes > 0 ? Date().addingTimeInterval(TimeInterval(minutes * 60)) : nil
-        say(minutes > 0 ? "😴 \(minutes) minute pachhi bandh thashe" : "Sleep timer bandh")
+        say(minutes > 0 ? "😴 Closes in \(minutes) min" : "Sleep timer off")
     }
 
     /// Back to the live edge after a pause (reconnects the channel).
@@ -516,13 +516,13 @@ final class PlayerController: NSObject, ObservableObject {
             recording = false
             recordStarted = nil
         } else {
-            guard gotVideo else { say("Video chalu thay pachhi record karo"); return }
+            guard gotVideo else { say("Start recording once the video plays"); return }
             let dir = Self.recordingsDir.path
             dlog("rec start \(dir)")
             vlc { $0.startRecording(atPath: dir) }
             recording = true
             recordStarted = Date()
-            say("⏺ Recording chalu")
+            say("⏺ Recording")
         }
     }
 
@@ -531,13 +531,13 @@ final class PlayerController: NSObject, ObservableObject {
         recordStarted = nil
         let size = (url.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int }) ?? 0
         dlog("recording saved \(url?.lastPathComponent ?? "-") bytes=\(size)")
-        say(url != nil ? "✅ Recording save: Files app → Alnur IPTV → Recordings" : "Recording save na thayu")
+        say(url != nil ? "✅ Recording save: Files app → Alnur IPTV → Recordings" : "Recording could not be saved")
     }
 
     func copyLink() {
         guard let u = streamURL else { return }
         UIPasteboard.general.string = u.absoluteString
-        say("🔗 Link copy thai gayu")
+        say("🔗 Link copied")
     }
 
     func openInVLC() {
@@ -545,7 +545,7 @@ final class PlayerController: NSObject, ObservableObject {
               let enc = u.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
               let x = URL(string: "vlc-x-callback://x-callback-url/stream?url=\(enc)") else { return }
         UIApplication.shared.open(x) { [weak self] ok in
-            if !ok { self?.say("VLC app install nathi (App Store mathi 'VLC for Mobile')") }
+            if !ok { self?.say("VLC app is not installed (get 'VLC for Mobile' from the App Store)") }
             else { self?.stop() }
         }
     }

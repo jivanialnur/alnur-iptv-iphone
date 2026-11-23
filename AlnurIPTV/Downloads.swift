@@ -52,7 +52,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
     override init() {
         super.init()
         if let d = UserDefaults.standard.data(forKey: "downloads"), let e = try? JSONDecoder().decode([DownloadEntry].self, from: d) {
-            entries = e.map { var x = $0; if x.state == .running || x.state == .waiting { x.state = .failed; x.error = "Adhuru rahyu – fari try karo" }; return x }
+            entries = e.map { var x = $0; if x.state == .running || x.state == .waiting { x.state = .failed; x.error = "Interrupted – try again" }; return x }
         }
         // reconnect to transfers that kept running while the app was closed
         session.getAllTasks { tasks in
@@ -87,12 +87,12 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
     /// Starts (or restarts) a download. Returns a short message for the user.
     @discardableResult
     func start(_ it: Item, acc: Account, ua: String) -> String {
-        guard it.kind == .movie || it.kind == .episode else { return "Live channel download nathi thato" }
+        guard it.kind == .movie || it.kind == .episode else { return "Live channels cannot be downloaded" }
         if let e = entry(for: it) {
-            if e.state == .running || e.state == .waiting { return "Aa pehla thi download thay chhe" }
-            if e.state == .done, localURL(for: it) != nil { return "Aa pehla thi download thayelu chhe" }
+            if e.state == .running || e.state == .waiting { return "Already downloading" }
+            if e.state == .done, localURL(for: it) != nil { return "Already downloaded" }
         }
-        guard let url = Xtream.streamURL(it, acc: acc, format: "ts") else { return "Link nathi" }
+        guard let url = Xtream.streamURL(it, acc: acc, format: "ts") else { return "No link" }
         var req = URLRequest(url: url)
         req.setValue(ua, forHTTPHeaderField: "User-Agent")
         pending[it.id] = req
@@ -105,7 +105,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
         save()
         task.resume()
         dlog("download start \(it.kind.rawValue) \(it.sid)")
-        return "⬇ Download chalu – Library → Downloads ma jovo"
+        return "⬇ Download started – see Library → Downloads"
     }
 
     func cancel(_ e: DownloadEntry) {
@@ -134,7 +134,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
             DispatchQueue.main.async {
                 self.update(id) {
                     $0.state = .failed
-                    $0.error = code == 401 ? "Server busy (1 connection) – player / PC / tablet bandh karine fari try karo" : "Server error HTTP \(code)"
+                    $0.error = code == 401 ? "Server busy (1 connection) – close the player / PC / tablet and try again" : "Server error HTTP \(code)"
                 }
                 dlog("download failed \(id) HTTP \(code)")
             }
@@ -204,14 +204,14 @@ struct DownloadsSection: View {
                                 Text(e.item.displayName).lineLimit(2)
                                 switch e.state {
                                 case .done:
-                                    Text("✅ Download thayu · " + ByteCountFormatter.string(fromByteCount: e.total, countStyle: .file))
+                                    Text("✅ Downloaded · " + ByteCountFormatter.string(fromByteCount: e.total, countStyle: .file))
                                         .font(.caption).foregroundStyle(.secondary)
                                 case .running, .waiting:
                                     ProgressView(value: e.progress).tint(.blue)
-                                    Text(e.total > 0 ? "\(Int(e.progress * 100))% · " + ByteCountFormatter.string(fromByteCount: e.received, countStyle: .file) + " / " + ByteCountFormatter.string(fromByteCount: e.total, countStyle: .file) : "Sharu thay chhe…")
+                                    Text(e.total > 0 ? "\(Int(e.progress * 100))% · " + ByteCountFormatter.string(fromByteCount: e.received, countStyle: .file) + " / " + ByteCountFormatter.string(fromByteCount: e.total, countStyle: .file) : "Starting…")
                                         .font(.caption).foregroundStyle(.secondary)
                                 case .failed:
-                                    Text("⚠️ " + (e.error ?? "Download na thayu") + " · dabavo = fari try").font(.caption).foregroundStyle(.red)
+                                    Text("⚠️ " + (e.error ?? "Download failed") + " · tap to retry").font(.caption).foregroundStyle(.red)
                                 }
                             }
                             Spacer(minLength: 0)
