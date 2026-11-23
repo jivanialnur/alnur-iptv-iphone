@@ -1,4 +1,5 @@
 import Foundation
+import AVKit
 import UIKit
 import VLCKit
 
@@ -42,6 +43,8 @@ final class PlayerController: NSObject, ObservableObject {
     @Published var pipAvailable = false
     @Published var pipActive = false
     private var pipRequested = false
+    private var pendingStart: Double?      // resume point, applied once the video runs
+    private var eventLengthMs = 0           // length reported by VLC (more reliable than media.length)
 
     /// libVLC stop/play can block (network, decoder threads). Never do them on the main thread.
     nonisolated static let vlcQueue = DispatchQueue(label: "alnur.vlc", qos: .userInitiated)
@@ -60,6 +63,8 @@ final class PlayerController: NSObject, ObservableObject {
         self.queue = queue
         self.index = index
         super.init()
+        player.delegate = self
+        dlog("PiP supported: \(AVPictureInPictureController.isPictureInPictureSupported())")
         player.setDeinterlaceFilter("yadif")
     }
 
@@ -217,7 +222,8 @@ final class PlayerController: NSObject, ObservableObject {
         media.addOption(":network-caching=\(app.settings.caching)")
         media.addOption(":live-caching=\(app.settings.caching)")
         media.addOption(":http-reconnect")
-        if let s = startAt, s > 5 { media.addOption(":start-time=\(Int(s))") }
+        pendingStart = (startAt ?? 0) > 5 ? startAt : nil
+        eventLengthMs = 0
         dlog("open \(current.kind.rawValue) \(current.sid) ua=\(ua) try=\(attempt) start=\(startAt ?? 0)")
         gotVideo = false
         openedAt = Date()
@@ -231,12 +237,18 @@ final class PlayerController: NSObject, ObservableObject {
         isPlaying = nowPlaying
         let t = Int(player.time.intValue)
         if t > 0 { timeMs = t }
-        let len = Int(player.media?.length.intValue ?? 0)
+        let len = eventLengthMs > 0 ? eventLengthMs : Int(player.media?.length.intValue ?? 0)
         if len > 0 { lengthMs = len }
 
         if !gotVideo && (player.hasVideoOut || (t > 0 && player.isPlaying)) {
             gotVideo = true
             status = nil
+            if let s = pendingStart {
+                pendingStart = nil
+                dlog("resume seek to \(Int(s))")
+                vlc { $0.time = VLCTime(int: Int32(s * 1000)) }
+                timeMs = Int(s * 1000)
+            }
             dlog("PLAYING \(current.sid) video=\(player.hasVideoOut) size=\(Int(player.videoSize.width))x\(Int(player.videoSize.height)) audio=\(audioTracks.map { $0.name }) subs=\(subtitleTracks.map { $0.name })")
             let uas = uaList
             app.setStreamUA(uas[min(uaIdx, uas.count - 1)])
@@ -393,4 +405,14 @@ extension PlayerController: VLCPictureInPictureMediaControlling {
     nonisolated func mediaTime() -> Int64 { Int64(player.time.intValue) }
     nonisolated func isMediaSeekable() -> Bool { player.isSeekable && mediaLength() > 0 }
     nonisolated func isMediaPlaying() -> Bool { player.isPlaying }
+}
+
+extension PlayerController: VLCMediaPlayerDelegate {
+    nonisolated func mediaPlayerLengthChanged(_ length: Int64) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.eventLengthMs = Int(length)
+            if length > 0 { self.lengthMs = Int(length); self.pip?.invalidatePlaybackState() }
+        }
+    }
 }
