@@ -102,6 +102,10 @@ grep -q "PiP: true" /tmp/p12 && echo "PASS  movie: home swipe → PiP" || echo "
 grep -q "recording saved .* bytes=[1-9]" $OUT/app.log && echo "PASS  Rec: recording file saved ($(grep -o 'recording saved.*' $OUT/app.log | head -1))" || echo "FAIL  Rec: no recording file"
 grep -q "download done movie:5000 bytes=[1-9]" $OUT/app.log && echo "PASS  Download: movie saved ($(grep -o 'download done.*' $OUT/app.log | head -1))" || echo "FAIL  Download: not saved"
 grep -q "open movie 5000 LOCAL-FILE" $OUT/app.log && grep -A3 "open movie 5000 LOCAL-FILE" $OUT/app.log | grep -q "PLAYING 5000" && echo "PASS  Download: plays offline from the iPhone" || echo "FAIL  Download: offline play"
+sed -n "/=== 07s_swipes/,/=== 07b/p" $OUT/app.log | grep -o "middle swipe.*\|after swipe.*\|player closed.*\|player: to.*" > /tmp/sw.txt
+EXP="middle swipe up landscape=true|after swipe: landscape=true aspect=Fill|middle swipe down landscape=true|after swipe: landscape=true aspect=Fit|middle swipe down landscape=true|player: to portrait|after swipe: landscape=false aspect=Fit|middle swipe up landscape=false|player: to landscape|after swipe: landscape=true aspect=Fit|middle swipe down landscape=true|player: to portrait|after swipe: landscape=false aspect=Fit|middle swipe down landscape=false|player closed 1004"
+GOT=$(grep -v "^$" /tmp/sw.txt | tr '\n' '|' | sed 's/|$//')
+[ "$GOT" = "$EXP" ] && echo "PASS  middle swipe: up=zoom/full screen, down=unzoom/upright/close" || { echo "FAIL  middle swipe"; echo "   got: $GOT"; }
 grep -q "player: to portrait" $OUT/app.log && echo "PASS  X in landscape turns to portrait (see 06b_portrait.png)" || echo "FAIL  to portrait"
 grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"
 grep -q "PLAYING 1003" $OUT/app.log && echo "PASS  close player + open other channel" || echo "FAIL  close + reopen"
