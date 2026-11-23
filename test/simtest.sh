@@ -48,6 +48,7 @@ sleep 14; xcrun simctl io "$UDID" screenshot "$OUT/05_after_next.png" >/dev/null
 run 06_play_ac3 14 -uitest_play live:1000; stop
 run 06b_portrait 9 -uitest_play live:1000 -uitest_portrait_after 6; stop
 run 07_play_hevc 14 -uitest_play live:1002; stop
+run 07s_swipes 28 -uitest_play live:1004 -uitest_swipes up,down,down,up,down,down; stop
 run 07b_record 10 -uitest_play live:1004 -uitest_rec YES
 sleep 10; xcrun simctl io "$UDID" screenshot "$OUT/07c_after_rec.png" >/dev/null 2>&1; stop
 run 08_movie_seek 24 -uitest_play movie:5000 -uitest_seekto 100; stop

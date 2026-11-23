@@ -61,13 +61,14 @@ struct PlayerScreen: View {
     @EnvironmentObject private var app: AppState
     @State private var showControls = true
     @State private var hint: String?
-    @State private var dragMode = 0          // 1 brightness, 2 volume
+    @State private var dragMode = 0          // 1 brightness (left), 2 volume (right), 3 screen size (middle)
     @State private var dragStartValue: Float = 0
     @State private var scrubbing = false
     @State private var scrub: Double = 0
     @State private var hideTask: Task<Void, Never>?
     @State private var sysVolume = SystemVolume()
     @State private var showGuide = false
+    @State private var isLandscape = true
 
     init(app: AppState, request: PlayRequest) {
         _pc = StateObject(wrappedValue: PlayerController(app: app, queue: request.queue, index: request.index))
@@ -81,7 +82,7 @@ struct PlayerScreen: View {
                     VolumeHost(volume: sysVolume).frame(width: 1, height: 1).allowsHitTesting(false)
                     VLCVideoView(pc: pc)
 
-                    // gestures: tap = show/hide, swipe up/down left = brightness, right = volume
+                    // gestures: tap = show/hide · swipe up/down: left = brightness, right = volume, middle = bigger / smaller / close
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture { toggleControls() }
@@ -124,8 +125,11 @@ struct PlayerScreen: View {
 
                 if showControls { controls(landscape: geo.size.width > geo.size.height, size: geo.size) }
             }
-            .onAppear { pc.viewSize = geo.size }
-            .onChange(of: geo.size) { s in pc.viewSize = s; if pc.aspect == .fill { pc.applyAspect() } }
+            .onAppear { pc.viewSize = geo.size; isLandscape = geo.size.width > geo.size.height }
+            .onChange(of: geo.size) { s in
+                pc.viewSize = s; isLandscape = s.width > s.height
+                if pc.aspect == .fill { pc.applyAspect() }
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .animation(.easeInOut(duration: 0.2), value: pc.message)
@@ -139,6 +143,14 @@ struct PlayerScreen: View {
             if UserDefaults.standard.bool(forKey: "uitest_rec") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 6) { pc.toggleRecording() }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 14) { pc.toggleRecording() }
+            }
+            if let seq = UserDefaults.standard.string(forKey: "uitest_swipes") {
+                for (n, d) in seq.split(separator: ",").enumerated() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 6 + Double(n) * 3) {
+                        middleSwipe(up: d == "up", down: d == "down", landscape: isLandscape)
+                        dlog("after swipe: landscape=\(isLandscape) aspect=\(pc.aspect.title)")
+                    }
+                }
             }
             let pa = UserDefaults.standard.double(forKey: "uitest_portrait_after")
             if pa > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + pa) { toPortrait() } }
@@ -415,6 +427,23 @@ struct PlayerScreen: View {
         app.closePlayer()
     }
 
+    /// YouTube-like middle swipe: up = bigger, down = smaller / close.
+    private func middleSwipe(up: Bool, down: Bool, landscape: Bool) {
+        guard up || down else { return }
+        dlog("middle swipe \(up ? "up" : "down") landscape=\(landscape)")
+        if up {
+            if !landscape { toLandscape() }
+            else if pc.aspect != .fill { pc.aspect = .fill; pc.applyAspect(); pc.say("Zoom: aakhi screen") }
+        } else {
+            if landscape {
+                if pc.aspect == .fill { pc.aspect = .fit; pc.applyAspect(); pc.say("Zoom bandh") }
+                else { toPortrait() }
+            } else {
+                close()
+            }
+        }
+    }
+
     private func toPortrait() {
         dlog("player: to portrait")
         Orientation.set(.allButUpsideDown, prefer: .portrait)
@@ -456,9 +485,11 @@ struct PlayerScreen: View {
             .onChanged { v in
                 if dragMode == 0 {
                     guard abs(v.translation.height) > abs(v.translation.width) else { return }
-                    dragMode = v.startLocation.x < size.width / 2 ? 1 : 2
+                    let x = v.startLocation.x
+                    dragMode = x < size.width / 3 ? 1 : x > size.width * 2 / 3 ? 2 : 3
                     dragStartValue = dragMode == 1 ? Float(UIScreen.main.brightness) : sysVolume.value
                 }
+                if dragMode == 3 { return }
                 let delta = Float(-v.translation.height / max(size.height * 0.8, 1))
                 if dragMode == 1 {
                     let b = min(max(dragStartValue + delta, 0), 1)
@@ -470,7 +501,8 @@ struct PlayerScreen: View {
                     showHint((vol == 0 ? "🔇 " : "🔊 ") + "\(Int((vol * 100).rounded()))%")
                 }
             }
-            .onEnded { _ in
+            .onEnded { v in
+                if dragMode == 3 { middleSwipe(up: v.translation.height < -50, down: v.translation.height > 50, landscape: size.width > size.height) }
                 dragMode = 0
                 if let h = hint { showHint(h) }
             }
