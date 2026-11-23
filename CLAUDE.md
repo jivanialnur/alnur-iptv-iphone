@@ -44,6 +44,15 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
 - Test log = app's own `Documents/iptv.log` (+ `HangWatch` main-thread watchdog), copied by simtest.sh.
 - Versions: 1.0.0 first · 1.0.1 ATS/login fix · 1.0.2 X closes player, no freeze, background handling, instant volume
   · 1.0.3 (his wish) Live/Movies/Series open straight on the category list (no Most Watched / Suggestions /
-  Recently Added; empty categories hidden, counts shown); search shows matching categories AND items.
+  Recently Added; empty categories hidden, counts shown); search shows matching categories AND items
+  · 1.0.4 no swipe hint text, volume % also for side buttons (KVO outputVolume), X in landscape → upright (chevron),
+  controls inside safe area (Dynamic Island), full-screen button in portrait. Delivered to his Downloads.
+- **PiP (his wish, home swipe → small window)**: MobileVLCKit 3 has no PiP. Branch `vlc4` = VLCKit 4 alpha
+  (`pod 'VLCKit', '4.0.0a26'`) + ObjC `AlnurIPTV/PiP/PiPVideoView` (VLCDrawable + VLCPictureInPictureDrawable) +
+  PlayerController as VLCPictureInPictureMediaControlling; starts PiP on willResignActive. With a18 everything played
+  but `pictureInPictureReady` was never called (no "PiP ready" log) and `:start-time` was ignored (now: seek after start).
+  Reference that works: github.com/cornejobarraza/expo-libvlc-player (VLCKit 4.0.0a26, Swift drawable).
+  a26 run NOT tested yet: **GitHub Actions stopped (billing / spending limit, private repo → macOS minutes x10)**.
+  Each push = build + simtest ≈ 2 macOS jobs; use `[skip ci]` for doc-only commits.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.
