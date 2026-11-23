@@ -61,7 +61,7 @@ final class PlayerController: NSObject, ObservableObject {
     private var pausedTotal: TimeInterval = 0
     var viewSize: CGSize = .zero
     @Published var bufferedMs = 0           // movies / episodes: how far the video is loaded (grey part)
-    private var lastDemux: Int32 = 0
+    private var lastDemux: Int64 = 0
     private var lastTimeForRate = 0
     private var bytesPerMs: Double = 0
     private var lastBufferLog = Date.distantPast
@@ -417,18 +417,20 @@ final class PlayerController: NSObject, ObservableObject {
     private func updateBuffer() {
         guard !isLive, gotVideo, lengthMs > 0 else { bufferedMs = 0; return }
         if let u = streamURL, Downloads.shared.localURL(for: current) != nil || u.isFileURL { bufferedMs = lengthMs; return }
-        guard let st = player.media?.statistics else { return }
-        let read = st.readBytes, demux = st.demuxReadBytes
+        guard let media = player.media else { return }
+        let st: VLCMediaStats = media.statistics
+        let read: Int64 = Int64(truncatingIfNeeded: st.readBytes)
+        let demux: Int64 = Int64(truncatingIfNeeded: st.demuxReadBytes)
         // byte rate of the video itself (bytes demuxed per ms of playback), smoothed
         let dt = timeMs - lastTimeForRate
-        let db = Int(demux &- lastDemux)
+        let db = Int(demux - lastDemux)
         if lastTimeForRate > 0, dt > 400, dt < 5000, db > 0 {
             let r = Double(db) / Double(dt)
             bytesPerMs = bytesPerMs == 0 ? r : bytesPerMs * 0.8 + r * 0.2
         }
         if dt > 400 || dt < 0 { lastTimeForRate = timeMs; lastDemux = demux }
         guard bytesPerMs > 0 else { bufferedMs = timeMs; return }
-        let aheadBytes = Double(max(Int(read &- demux), 0))
+        let aheadBytes = Double(max(read - demux, 0))
         let aheadMs = Int(aheadBytes / bytesPerMs) + app.settings.caching
         bufferedMs = min(lengthMs, timeMs + aheadMs)
         if Date().timeIntervalSince(lastBufferLog) > 5 {
