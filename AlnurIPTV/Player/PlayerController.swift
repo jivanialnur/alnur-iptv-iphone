@@ -121,6 +121,7 @@ final class PlayerController: ObservableObject {
         let tok = token
         let at = resumeAfterBackground
         dlog("foreground: reopen \(current.sid)")
+        Orientation.set(.allButUpsideDown, prefer: .landscapeRight)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in self?.open(tok: tok, startAt: at) }
     }
 
