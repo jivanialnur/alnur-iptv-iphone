@@ -29,3 +29,10 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   Application Support, favourites, most watched, resume / continue watching in UserDefaults), `Views/` (tabs Live ·
   Movies · Series · Library · Settings), `Player/` (VLCKit; stop + 0.8 s wait before next stream; 4 retries per UA then next UA;
   swipe left = brightness, right = volume; auto-next episode with 5 s countdown).
+- **Simulator test** (job `simtest`): `test/mock.js` (mock Xtream: MAG/Dalvik-only API, VLC-only streams, 1 connection + 1 s busy)
+  + `test/simtest.sh` launch the app with hooks (`AlnurIPTV/UITest.swift`: `-uitest_login`, `-uitest_play live:1001`,
+  `-uitest_tab`, `-uitest_open`, `-uitest_next_after`, `-uitest_seekto`) and take screenshots. Results + PNGs go to the
+  prerelease `simtest`; download with `gh api .../releases/tags/simtest` + asset ids (artifact host is blocked here).
+- Player is presented with UIKit (`PlayerHost`), NOT SwiftUI fullScreenCover – the cover only allowed portrait.
+- Work is on branch `app-v1` (v1.0.0, all simtest checks pass 2026-11-23); not yet merged to `main`.
+- Not verified on a real iPhone / real server yet.
