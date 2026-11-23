@@ -25,6 +25,16 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
     private var taskToId: [Int: String] = [:]
     private var lastPublish = Date.distantPast
 
+    /// fallback when the background transfer service refuses the request (seen in the simulator)
+    private lazy var fgSession: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.timeoutIntervalForRequest = 120
+        c.timeoutIntervalForResource = 6 * 3600
+        return URLSession(configuration: c, delegate: self, delegateQueue: nil)
+    }()
+    private var fallbackTried = Set<String>()
+    private var pending: [String: URLRequest] = [:]
+
     private lazy var session: URLSession = {
         let c = URLSessionConfiguration.background(withIdentifier: Self.sessionID)
         c.isDiscretionary = false
@@ -85,6 +95,8 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
         guard let url = Xtream.streamURL(it, acc: acc, format: "ts") else { return "Link nathi" }
         var req = URLRequest(url: url)
         req.setValue(ua, forHTTPHeaderField: "User-Agent")
+        pending[it.id] = req
+        fallbackTried.remove(it.id)
         let task = session.downloadTask(with: req)
         task.taskDescription = it.id
         entries.removeAll { $0.id == it.id }
@@ -150,6 +162,16 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
         guard let error, let id = task.taskDescription else { return }
         if (error as NSError).code == NSURLErrorCancelled { return }
         DispatchQueue.main.async {
+            // background service failed before any data: try once more with a normal download
+            if session !== self.fgSession, !self.fallbackTried.contains(id), let req = self.pending[id],
+               (self.entries.first { $0.id == id }?.received ?? 0) == 0 {
+                self.fallbackTried.insert(id)
+                dlog("download background failed (\(error.localizedDescription)) – retry normal \(id)")
+                let t = self.fgSession.downloadTask(with: req)
+                t.taskDescription = id
+                t.resume()
+                return
+            }
             self.update(id) { if $0.state != .done { $0.state = .failed; $0.error = error.localizedDescription } }
             dlog("download error \(id) \(error.localizedDescription)")
         }
