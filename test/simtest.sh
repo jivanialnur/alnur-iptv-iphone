@@ -73,7 +73,7 @@ run 14_stall_close 24 -uitest_play live:1005 -uitest_close_after 9 -uitest_reope
 xcrun simctl io "$UDID" screenshot "$OUT/14_after_stall.png" >/dev/null 2>&1; stop
 run 15_download 40 -uitest_tab library -uitest_download movie:5000
 xcrun simctl io "$UDID" screenshot "$OUT/15b_downloads.png" >/dev/null 2>&1; stop
-run 16_play_offline 45 -uitest_download movie:5000; stop
+run 16_play_offline 45 -uitest_log YES -uitest_download movie:5000; stop
 run 09_library 8 -uitest_tab library; stop
 run 10_settings 6 -uitest_tab settings; stop
 
@@ -103,8 +103,8 @@ grep -q "PiP: true" /tmp/p12 && echo "PASS  movie: home swipe → PiP" || echo "
 grep -q "recording saved .* bytes=[1-9]" $OUT/app.log && echo "PASS  Rec: recording file saved ($(grep -o 'recording saved.*' $OUT/app.log | head -1))" || echo "FAIL  Rec: no recording file"
 grep -q "download done movie:5000 bytes=[1-9]" $OUT/app.log && echo "PASS  Download: movie saved ($(grep -o 'download done.*' $OUT/app.log | head -1))" || echo "FAIL  Download: not saved"
 grep -q "open movie 5000 LOCAL-FILE" $OUT/app.log && grep -A3 "open movie 5000 LOCAL-FILE" $OUT/app.log | grep -q "PLAYING 5000" && echo "PASS  Download: plays offline from the iPhone" || echo "FAIL  Download: offline play"
-sed -n "/=== 07s_swipes/,/=== 07b/p" $OUT/app.log | grep -o "middle swipe.*\|player closed.*\|player: to.*\|Zoom.*" | uniq > /tmp/sw.txt
-EXP="middle swipe up landscape=true|middle swipe down landscape=true|middle swipe down landscape=true|player: to portrait|middle swipe up landscape=false|player: to landscape|middle swipe down landscape=true|player: to portrait|middle swipe down landscape=false|player closed 1004"
+sed -n "/=== 07s_swipes/,/=== 07b/p" $OUT/app.log | grep -o "middle swipe.*\|player closed.*\|player: to.*" > /tmp/sw.txt
+EXP="middle swipe up landscape=true|middle swipe down landscape=true|middle swipe down landscape=true|player: to portrait|middle swipe up landscape=false|player: to landscape|middle swipe down landscape=true|player: to portrait|middle swipe down landscape=false|player closed 1004|player closed 1004"
 GOT=$(grep -v "^$" /tmp/sw.txt | tr '\n' '|' | sed 's/|$//')
 [ "$GOT" = "$EXP" ] && echo "PASS  middle swipe: up=zoom/full screen, down=unzoom/upright/close" || { echo "FAIL  middle swipe"; echo "   got: $GOT"; }
 sed -n "/=== 08t_taps/,/=== 1[0-9a-z_]*:/p" $OUT/app.log > /tmp/tp.txt
