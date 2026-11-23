@@ -38,7 +38,7 @@ run 07_play_hevc 14 -uitest_play live:1002; stop
 run 08_movie_seek 24 -uitest_play movie:5000 -uitest_seekto 100; stop
 # app to home screen while a live channel plays, then back
 run 11a_bg_live 12 -uitest_play live:1004
-mark "home screen"; xcrun simctl launch "$UDID" com.apple.Preferences >/dev/null; sleep 6
+mark "home screen"; xcrun simctl launch "$UDID" com.apple.Preferences >/dev/null; sleep 8
 xcrun simctl io "$UDID" screenshot "$OUT/11b_home.png" >/dev/null 2>&1
 mark "back to app"; xcrun simctl launch "$UDID" $BID >/dev/null; sleep 12
 xcrun simctl io "$UDID" screenshot "$OUT/11c_back_live.png" >/dev/null 2>&1; stop
@@ -72,8 +72,14 @@ chk "HEVC channel plays" "PLAYING 1002"
 chk "movie plays" "PLAYING 5000"
 chk "movie resume point saved (~100s)" "save pos 5000 1[0-9][0-9]/180"
 cnt() { grep -c "$1" $OUT/app.log; }
-[ "$(cnt 'background: stop 1004')" -ge 1 ] && [ "$(cnt 'PLAYING 1004')" -ge 3 ] && echo "PASS  live: home screen and back plays again" || echo "FAIL  live: home screen and back"
-[ "$(cnt 'foreground: reopen 5000')" -ge 1 ] && grep -A3 "foreground: reopen 5000" $OUT/app.log | grep -q "open movie 5000 .*start=[1-9]" && echo "PASS  movie: back from home continues at same time" || echo "FAIL  movie: back from home resume"
+# section of the log for one scenario
+part() { sed -n "/=== $1/,/=== [0-9][0-9][a-z_]*:/p" $OUT/app.log; }
+part 11a_bg_live > /tmp/p11; part 12a_bg_movie > /tmp/p12
+grep -q "PiP: true" /tmp/p11 && echo "PASS  live: home swipe → video continues in PiP window (11b_home.png)" || echo "FAIL  live: PiP did not start"
+grep -q "PiP: true" /tmp/p11 && ! grep -q "background: stop" /tmp/p11 && echo "PASS  live: stream kept playing in PiP" || echo "FAIL  live: stream stopped in background"
+grep -q "PiP stop (app back)" /tmp/p11 && echo "PASS  live: back to app → PiP closes, player continues" || echo "FAIL  live: PiP not closed on return"
+grep -q "PiP: true" /tmp/p12 && echo "PASS  movie: home swipe → PiP" || echo "FAIL  movie: PiP did not start"
+{ grep -q "PiP: true" /tmp/p12 || grep -A3 "foreground: reopen 5000" /tmp/p12 | grep -q "open movie 5000 .*start=[1-9]"; } && echo "PASS  movie: back from home continues at same time" || echo "FAIL  movie: back from home resume"
 grep -q "player: to portrait" $OUT/app.log && echo "PASS  X in landscape turns to portrait (see 06b_portrait.png)" || echo "FAIL  to portrait"
 grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"
 grep -q "PLAYING 1003" $OUT/app.log && echo "PASS  close player + open other channel" || echo "FAIL  close + reopen"

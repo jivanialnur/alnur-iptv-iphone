@@ -1,6 +1,6 @@
 import SwiftUI
 import UIKit
-import MobileVLCKit
+import VLCKit
 import MediaPlayer
 import AVFoundation
 
@@ -44,11 +44,13 @@ struct VolumeHost: UIViewRepresentable {
 }
 
 struct VLCVideoView: UIViewRepresentable {
-    let player: VLCMediaPlayer
+    let pc: PlayerController
     func makeUIView(context: Context) -> UIView {
-        let v = UIView()
+        let v = PiPVideoView()
         v.backgroundColor = .black
-        player.drawable = v
+        v.pipMediaController = pc
+        v.onPiPReady = { [weak pc] c in DispatchQueue.main.async { pc?.pipReady(c) } }
+        pc.player.drawable = v
         return v
     }
     func updateUIView(_ uiView: UIView, context: Context) {}
@@ -76,7 +78,7 @@ struct PlayerScreen: View {
                 Group {
                     Color.black
                     VolumeHost(volume: sysVolume).frame(width: 1, height: 1).allowsHitTesting(false)
-                    VLCVideoView(player: pc.player)
+                    VLCVideoView(pc: pc)
 
                     // gestures: tap = show/hide, swipe up/down left = brightness, right = volume
                     Color.clear
@@ -139,6 +141,9 @@ struct PlayerScreen: View {
                     if pc.isLive { Text("● LIVE").font(.caption.bold()).foregroundStyle(.red) }
                 }
                 Spacer()
+                if pc.pipAvailable {
+                    Button { pc.startPiP() } label: { Image(systemName: "pip.enter").font(.title3).frame(width: 44, height: 44) }
+                }
                 tracksMenu
                 Button { app.toggleFav(pc.current) } label: {
                     Image(systemName: app.isFav(pc.current) ? "star.fill" : "star").font(.title3).frame(width: 44, height: 44)
@@ -155,13 +160,13 @@ struct PlayerScreen: View {
                         .disabled(!pc.canPrev).opacity(pc.canPrev ? 1 : 0.3)
                 }
                 if !pc.isLive {
-                    Button { pc.seek(by: -10); scheduleHide() } label: { Image(systemName: "gobackward.10").font(.title) }
+                    Button { pc.skip(-10); scheduleHide() } label: { Image(systemName: "gobackward.10").font(.title) }
                 }
                 Button { pc.togglePause(); scheduleHide() } label: {
                     Image(systemName: pc.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 44))
                 }
                 if !pc.isLive {
-                    Button { pc.seek(by: 30); scheduleHide() } label: { Image(systemName: "goforward.30").font(.title) }
+                    Button { pc.skip(30); scheduleHide() } label: { Image(systemName: "goforward.30").font(.title) }
                 }
                 if pc.queue.count > 1 {
                     Button { pc.next(); scheduleHide() } label: { Image(systemName: "forward.end.fill").font(.title) }

@@ -2,7 +2,7 @@ platform :ios, '16.0'
 use_frameworks!
 
 target 'AlnurIPTV' do
-  pod 'MobileVLCKit', '~> 3.6.0'
+  pod 'VLCKit', '4.0.0a18'
 end
 
 post_install do |installer|

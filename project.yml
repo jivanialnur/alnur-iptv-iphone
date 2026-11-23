@@ -13,8 +13,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.alnur.iptvplayer
         PRODUCT_NAME: AlnurIPTV
-        MARKETING_VERSION: "1.0.4"
-        CURRENT_PROJECT_VERSION: "5"
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "6"
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -22,6 +22,7 @@ targets:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         CODE_SIGN_STYLE: Manual
         CODE_SIGNING_ALLOWED: NO
+        SWIFT_OBJC_BRIDGING_HEADER: AlnurIPTV/AlnurIPTV-Bridging-Header.h
     info:
       path: AlnurIPTV/Info.plist
       properties:
@@ -39,3 +40,5 @@ targets:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: Used to play IPTV streams.
         ITSAppUsesNonExemptEncryption: false
+        UIBackgroundModes:
+          - audio
