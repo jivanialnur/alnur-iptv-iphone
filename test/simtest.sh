@@ -31,9 +31,9 @@ LOGIN="http://iptv-mock.test:8899|demo|demo"
 if [ "${MODE:-full}" = glass ]; then
   # iOS 26 simulator (Liquid Glass) is slow on Intel: just screenshots of the player controls
   run g1_login 120 -uitest_reset YES -uitest_login "$LOGIN"; stop
-  run g2_landscape 60 -uitest_play live:1001 -uitest_keep_controls YES
+  run g2_landscape 60 -uitest_play live:1001 -uitest_keep_controls YES -uitest_sound_panel YES
   sleep 2; stop
-  run g3_portrait 60 -uitest_play live:1004 -uitest_keep_controls YES -uitest_portrait_after 30
+  run g3_portrait 60 -uitest_play live:1004 -uitest_keep_controls YES -uitest_portrait_after 30 -uitest_sound_panel YES
   stop
   run g4_movie 60 -uitest_play movie:5000 -uitest_keep_controls YES; stop
   sleep 1; cp "$LOG" $OUT/app.log; echo "glass screenshots done"; exit 0
@@ -48,6 +48,9 @@ sleep 14; xcrun simctl io "$UDID" screenshot "$OUT/05_after_next.png" >/dev/null
 run 06_play_ac3 14 -uitest_play live:1000; stop
 run 06b_portrait 9 -uitest_play live:1000 -uitest_portrait_after 6; stop
 run 07_play_hevc 14 -uitest_play live:1002; stop
+run 07x_sound_set 16 -uitest_sound 180,auto -uitest_play live:1000; stop
+run 07y_sound_kept 16 -uitest_play live:1004; stop
+run 07z_sound_reset 6 -uitest_sound 100 -uitest_tab live; stop
 run 07s_swipes 28 -uitest_play live:1004 -uitest_swipes up,down,down,up,down,down; stop
 run 07b_record 10 -uitest_play live:1004 -uitest_rec YES
 sleep 10; xcrun simctl io "$UDID" screenshot "$OUT/07c_after_rec.png" >/dev/null 2>&1; stop
@@ -115,6 +118,9 @@ grep -q "rate 2.0" /tmp/tp.txt && grep -q "rate 1.0" /tmp/tp.txt && echo "PASS  
 B=$(grep -o "buffer 5000: time [0-9]*s, loaded to [0-9]*s (ahead [0-9]*s)" $OUT/app.log | tail -1)
 echo "$B" | awk '{ split($4,t,"s"); split($7,l,"s"); exit !(l[1] > t[1] + 2) }' && echo "PASS  movie grey buffer bar ahead of play ($B)" || echo "FAIL  buffer bar ($B)"
 grep -q "users now: \[\"demo\", \"Bhai\"\] current=Bhai" $OUT/app.log && grep -q "after switch: current=demo" $OUT/app.log && echo "PASS  second user added, switch back works" || echo "FAIL  users ($(grep -o 'users now.*\|after switch.*' $OUT/app.log | tr '\n' ' '))"
+sed -n "/=== 07x_sound_set/,/=== 07y/p" $OUT/app.log > /tmp/s1.txt; sed -n "/=== 07y_sound_kept/,/=== 07z/p" $OUT/app.log > /tmp/s2.txt
+grep -q 'sound: boost 180% autoLevel=true filters=\["normvol", "compressor"\]' /tmp/s1.txt && grep -q "PLAYING 1000" /tmp/s1.txt && echo "PASS  sound boost 180% + auto-level: VLC filters on, channel plays" || echo "FAIL  sound filters ($(grep -o 'sound:.*' /tmp/s1.txt | head -1))"
+grep -q 'sound: boost 180% autoLevel=true' /tmp/s2.txt && grep -q "PLAYING 1004" /tmp/s2.txt && echo "PASS  sound settings kept after app restart" || echo "FAIL  sound settings not kept"
 grep -q "player: to portrait" $OUT/app.log && echo "PASS  X in landscape turns to portrait (see 06b_portrait.png)" || echo "FAIL  to portrait"
 grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"
 grep -q "PLAYING 1003" $OUT/app.log && echo "PASS  close player + open other channel" || echo "FAIL  close + reopen"

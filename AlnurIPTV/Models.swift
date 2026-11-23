@@ -73,6 +73,20 @@ struct AppSettings: Codable, Equatable {
     var liveFormat: String = "ts"
     var caching: Int = 1500
     var autoNext: Bool = true
+    /// sound: 100…200 % (boost with limiter) and auto-level (same loudness on every channel)
+    var soundBoost: Int = 100
+    var autoLevel: Bool = false
+
+    init() {}
+    // older saved settings have no sound keys – read what is there, default the rest
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        liveFormat = try c.decodeIfPresent(String.self, forKey: .liveFormat) ?? "ts"
+        caching = try c.decodeIfPresent(Int.self, forKey: .caching) ?? 1500
+        autoNext = try c.decodeIfPresent(Bool.self, forKey: .autoNext) ?? true
+        soundBoost = try c.decodeIfPresent(Int.self, forKey: .soundBoost) ?? 100
+        autoLevel = try c.decodeIfPresent(Bool.self, forKey: .autoLevel) ?? false
+    }
 }
 
 struct Season: Identifiable, Hashable {

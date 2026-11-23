@@ -53,6 +53,13 @@ struct MainTabs: View {
         }
         .task { await app.refreshAccount() }
         .task {
+            if let snd = UserDefaults.standard.string(forKey: "uitest_sound") {
+                // e.g. "180,auto" – store like the user would in Settings
+                let p = snd.split(separator: ",")
+                app.settings.soundBoost = Int(p.first ?? "100") ?? 100
+                app.settings.autoLevel = p.contains("auto")
+                app.saveSettings()
+            }
             if let u = UserDefaults.standard.string(forKey: "uitest_add_user") {
                 let p = u.components(separatedBy: "|")
                 let first = app.account

@@ -243,6 +243,7 @@ final class PlayerController: NSObject, ObservableObject {
         guard let media = VLCMedia(url: url) else { error = "Invalid link"; status = nil; return }
         media.addOption(":http-user-agent=\(ua)")
         media.addOption(":network-caching=\(app.settings.caching)")
+        addSoundFilters(media)
         if !isLive && !url.isFileURL {
             // movies / episodes: read well ahead (64 MB) so short network dips do not stop the video
             media.addOption(":prefetch-buffer-size=65536")
@@ -437,6 +438,42 @@ final class PlayerController: NSObject, ObservableObject {
             lastBufferLog = Date()
             dlog("buffer \(current.sid): time \(timeMs / 1000)s, loaded to \(bufferedMs / 1000)s (ahead \(aheadMs / 1000)s)")
         }
+    }
+
+    /// Sound options as VLC audio filters (both are built into VLCKit):
+    /// - boost: compressor used as a limiter – peaks are held below the threshold, then the make-up gain
+    ///   raises everything by the boost; so 200 % is louder but does not clip.
+    /// - auto-level: normvol – measures loudness continuously and evens it out slowly (no jumps), so channels
+    ///   and adverts end up at about the same level. The iPhone volume buttons keep working as before.
+    private func addSoundFilters(_ media: VLCMedia) {
+        let boost = min(max(app.settings.soundBoost, 100), 200)
+        let auto = app.settings.autoLevel
+        var filters: [String] = []
+        if auto {
+            filters.append("normvol")
+            media.addOption(":norm-buff-size=40")
+            media.addOption(":norm-max-level=1.6")
+        }
+        if boost > 100 || auto {
+            let gain = 20 * log10(Double(boost) / 100)          // dB, 0 … 6
+            filters.append("compressor")
+            media.addOption(":compressor-rms-peak=1.0")            // react to peaks
+            media.addOption(":compressor-attack=1.5")
+            media.addOption(":compressor-release=150")
+            media.addOption(":compressor-threshold=" + String(format: "%.1f", -(gain + 1.5)))
+            media.addOption(":compressor-ratio=20")
+            media.addOption(":compressor-knee=2")
+            media.addOption(":compressor-makeup-gain=" + String(format: "%.1f", gain))
+        }
+        if !filters.isEmpty { media.addOption(":audio-filter=" + filters.joined(separator: ":")) }
+        dlog("sound: boost \(boost)% autoLevel=\(auto) filters=\(filters)")
+    }
+
+    /// New sound settings: reopen the stream at the same point so VLC uses them.
+    func applySound() {
+        guard gotVideo || error != nil else { return }
+        dlog("apply sound")
+        retry()
     }
 
     // MARK: extra features

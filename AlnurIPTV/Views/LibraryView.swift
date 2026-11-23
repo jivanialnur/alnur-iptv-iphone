@@ -117,6 +117,12 @@ struct SettingsView: View {
                 }
                 .onChange(of: app.settings) { _ in app.saveSettings() }
 
+                Section {
+                    SoundControls(app: app)
+                } header: { Text("Sound") } footer: {
+                    Text("Boost uses a limiter so the sound does not clip. Auto-level evens out loudness slowly between channels and adverts. Your iPhone volume buttons keep working.")
+                }
+
                 Section("Lists") {
                     ForEach([Kind.live, .movie, .series], id: \.self) { k in
                         LabeledContent(k.title, value: app.lists[k].map { "\($0.items.count)" } ?? "–")

@@ -69,6 +69,7 @@ struct PlayerScreen: View {
     @State private var sysVolume = SystemVolume()
     @State private var showGuide = false
     @State private var isLandscape = true
+    @State private var showSound = false
 
     init(app: AppState, request: PlayRequest) {
         _pc = StateObject(wrappedValue: PlayerController(app: app, queue: request.queue, index: request.index))
@@ -126,7 +127,28 @@ struct PlayerScreen: View {
                     .transition(.opacity)
                 }
 
-                if showControls { controls(landscape: geo.size.width > geo.size.height, size: geo.size) }
+                if showControls && !showSound { controls(landscape: geo.size.width > geo.size.height, size: geo.size) }
+
+                if showSound {
+                    // tap outside closes; the video keeps playing behind
+                    Color.black.opacity(0.001).ignoresSafeArea()
+                        .onTapGesture { withAnimation(.easeInOut(duration: 0.25)) { showSound = false } }
+                    let land = geo.size.width > geo.size.height
+                    VStack {
+                        if !land { Spacer() }
+                        HStack {
+                            if land { Spacer() }
+                            SoundPanel(app: app) { pc.applySound() } onClose: {
+                                withAnimation(.easeInOut(duration: 0.25)) { showSound = false }
+                            }
+                            .frame(width: land ? 340 : nil)
+                            .frame(maxHeight: land ? .infinity : nil)
+                            .padding(land ? .trailing : .horizontal, 12)
+                            .padding(.vertical, land ? 12 : 8)
+                        }
+                    }
+                    .transition(.move(edge: land ? .trailing : .bottom).combined(with: .opacity))
+                }
             }
             .onAppear { pc.viewSize = geo.size; isLandscape = geo.size.width > geo.size.height }
             .onChange(of: geo.size) { s in
@@ -146,6 +168,9 @@ struct PlayerScreen: View {
             if UserDefaults.standard.bool(forKey: "uitest_rec") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 6) { pc.toggleRecording() }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 14) { pc.toggleRecording() }
+            }
+            if UserDefaults.standard.bool(forKey: "uitest_sound_panel") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 8) { showSound = true }
             }
             if let seq = UserDefaults.standard.string(forKey: "uitest_taps") {
                 for (n, d) in seq.split(separator: ",").enumerated() {
@@ -214,6 +239,7 @@ struct PlayerScreen: View {
                         Spacer(minLength: 4)
                         GlassIcon(system: aspectIcon, label: "Screen size: \(pc.aspect.title)") { pc.cycleAspect(); scheduleHide() }
                         transport(big: false)
+                        GlassIcon(system: "speaker.wave.3.fill", label: "Sound") { withAnimation(.easeInOut(duration: 0.25)) { showSound = true } }
                         subtitleMenu
                         audioMenu
                         settingsMenu
@@ -225,6 +251,7 @@ struct PlayerScreen: View {
                     HStack(spacing: 4) {
                         GlassIcon(system: pc.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 40, label: "Mute / sound") { pc.toggleMute(); scheduleHide() }
                         GlassIcon(system: aspectIcon, size: 40, label: "Screen size: \(pc.aspect.title)") { pc.cycleAspect(); scheduleHide() }
+                        GlassIcon(system: "speaker.wave.3.fill", size: 40, label: "Sound") { withAnimation(.easeInOut(duration: 0.25)) { showSound = true } }
                         subtitleMenu
                         audioMenu
                         settingsMenu
@@ -674,5 +701,77 @@ struct ScrubBar: View {
             .animation(.easeOut(duration: 0.15), value: dragging)
         }
         .frame(height: 30)
+    }
+}
+
+/// Sound panel: volume boost (100–200 %, limiter) and auto-level. Right side in landscape, bottom in portrait.
+struct SoundPanel: View {
+    @ObservedObject var app: AppState
+    var onApply: () -> Void = {}
+    var onClose: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Sound", systemImage: "speaker.wave.3.fill").font(.headline)
+                Spacer()
+                if let onClose { Button { onClose() } label: { Image(systemName: "xmark").font(.headline).frame(width: 36, height: 36) }.buttonStyle(.plain).glass(Circle()) }
+            }
+            SoundControls(app: app, onApply: onApply)
+        }
+        .padding(18)
+        .foregroundStyle(.white)
+        .glass(RoundedRectangle(cornerRadius: 28), interactive: false)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+/// The two sound options – used in the player panel and in Settings.
+struct SoundControls: View {
+    @ObservedObject var app: AppState
+    var onApply: () -> Void = {}
+    @State private var boost: Double = 100
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Volume boost")
+                    Spacer()
+                    Text("\(Int(boost))%").font(.body.monospacedDigit().weight(.semibold))
+                }
+                Slider(value: $boost, in: 100...200, step: 5) { editing in
+                    if !editing { commitBoost() }
+                }
+                if boost > 150 {
+                    Label("Above 150% the sound may distort", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
+            Toggle(isOn: Binding(get: { app.settings.autoLevel }, set: { v in
+                app.settings.autoLevel = v; app.saveSettings(); onApply()
+            })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Auto-level")
+                    Text("Same loudness on every channel, adverts not suddenly louder").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Button {
+                boost = 100
+                app.settings.soundBoost = 100
+                app.settings.autoLevel = false
+                app.saveSettings(); onApply()
+            } label: { Label("Reset to default", systemImage: "arrow.counterclockwise") }
+            .disabled(app.settings.soundBoost == 100 && !app.settings.autoLevel)
+        }
+        .onAppear { boost = Double(app.settings.soundBoost) }
+    }
+
+    private func commitBoost() {
+        let v = Int(boost)
+        guard v != app.settings.soundBoost else { return }
+        app.settings.soundBoost = v
+        app.saveSettings()
+        onApply()
     }
 }
