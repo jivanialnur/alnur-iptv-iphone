@@ -418,7 +418,7 @@ final class PlayerController: NSObject, ObservableObject {
         guard !isLive, gotVideo, lengthMs > 0 else { bufferedMs = 0; return }
         if let u = streamURL, Downloads.shared.localURL(for: current) != nil || u.isFileURL { bufferedMs = lengthMs; return }
         guard let media = player.media else { return }
-        let st: VLCMediaStats = media.statistics
+        let st: VLCMedia.Stats = media.statistics
         let read: Int64 = Int64(truncatingIfNeeded: st.readBytes)
         let demux: Int64 = Int64(truncatingIfNeeded: st.demuxReadBytes)
         // byte rate of the video itself (bytes demuxed per ms of playback), smoothed
