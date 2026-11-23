@@ -114,6 +114,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .task { for k in [Kind.live, .movie, .series] { await app.ensure(k) } }
             .confirmationDialog("Logout karvu? Saved lists kadhi nakhashe (favourites rehse).", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Logout", role: .destructive) { app.logout() }
             }

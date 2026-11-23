@@ -28,7 +28,8 @@ LOGIN="http://127.0.0.1:8899|demo|demo"
 run 01_live 25 -uitest_reset YES -uitest_login "$LOGIN"; stop
 run 02_movies 10 -uitest_tab movie; stop
 run 03_series_detail 10 -uitest_tab series -uitest_open series:700; stop
-run 04_play_interlaced 14 -uitest_play live:1001 -uitest_next_after 16
+run 04a_controls 3 -uitest_play live:1001 -uitest_next_after 19
+sleep 11; xcrun simctl io "$UDID" screenshot "$OUT/04_play_interlaced.png" >/dev/null 2>&1
 sleep 14; xcrun simctl io "$UDID" screenshot "$OUT/05_after_next.png" >/dev/null 2>&1; stop
 run 06_play_ac3 14 -uitest_play live:1000; stop
 run 07_play_hevc 14 -uitest_play live:1002; stop

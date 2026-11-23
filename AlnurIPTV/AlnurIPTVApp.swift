@@ -28,7 +28,7 @@ enum Orientation {
                     vc = v.presentedViewController
                 }
             }
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: prefer)) { _ in }
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: prefer)) { e in dlog("rotate error: \(e.localizedDescription)") }
         }
     }
 }

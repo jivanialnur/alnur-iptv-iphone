@@ -69,6 +69,8 @@ struct PlayerScreen: View {
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
             Orientation.set(.allButUpsideDown, prefer: .landscapeRight)
+            // the full-screen cover is still animating in on appear – ask again once it is on screen
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { Orientation.set(.allButUpsideDown, prefer: .landscapeRight) }
             pc.start()
             scheduleHide()
         }
