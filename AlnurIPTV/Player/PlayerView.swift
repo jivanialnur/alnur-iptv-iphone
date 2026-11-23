@@ -7,6 +7,14 @@ import AVFoundation
 /// iPhone system volume (instant, same as the side buttons). An MPVolumeView must be on screen for this;
 /// it is kept invisible and also hides the big system volume pop-up.
 final class SystemVolume {
+    private var kvo: NSKeyValueObservation?
+    /// called with the new volume (0…1) whenever it changes – side buttons or our swipe
+    func observe(_ onChange: @escaping (Float) -> Void) {
+        try? AVAudioSession.sharedInstance().setActive(true)
+        kvo = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.new]) { _, ch in
+            if let v = ch.newValue { DispatchQueue.main.async { onChange(v) } }
+        }
+    }
     let view: MPVolumeView = {
         let v = MPVolumeView(frame: CGRect(x: -2000, y: -2000, width: 1, height: 1))
         v.alpha = 0.01
@@ -65,15 +73,18 @@ struct PlayerScreen: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                Color.black
-                VolumeHost(volume: sysVolume).frame(width: 1, height: 1).allowsHitTesting(false)
-                VLCVideoView(player: pc.player)
+                Group {
+                    Color.black
+                    VolumeHost(volume: sysVolume).frame(width: 1, height: 1).allowsHitTesting(false)
+                    VLCVideoView(player: pc.player)
 
-                // gestures: tap = show/hide, swipe up/down left = brightness, right = volume
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { toggleControls() }
-                    .gesture(swipe(geo.size))
+                    // gestures: tap = show/hide, swipe up/down left = brightness, right = volume
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { toggleControls() }
+                        .gesture(swipe(geo.size))
+                }
+                .ignoresSafeArea()
 
                 if let s = pc.status, pc.error == nil {
                     VStack(spacing: 10) {
@@ -94,16 +105,19 @@ struct PlayerScreen: View {
                         .allowsHitTesting(false)
                 }
 
-                if showControls { controls }
+                if showControls { controls(landscape: geo.size.width > geo.size.height) }
             }
         }
-        .ignoresSafeArea()
+        .background(Color.black.ignoresSafeArea())
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
             pc.start()
             scheduleHide()
+            let pa = UserDefaults.standard.double(forKey: "uitest_portrait_after")
+            if pa > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + pa) { toPortrait() } }
+            sysVolume.observe { v in showHint((v == 0 ? "🔇 " : "🔊 ") + "\(Int((v * 100).rounded()))%") }
         }
         .onDisappear {
             pc.stop()
@@ -113,10 +127,13 @@ struct PlayerScreen: View {
     }
 
     // MARK: overlay
-    private var controls: some View {
+    private func controls(landscape: Bool) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                Button { close() } label: { Image(systemName: "xmark").font(.title3.bold()).frame(width: 44, height: 44) }
+                // landscape: X first turns the player upright; upright: X closes
+                Button { landscape ? toPortrait() : close() } label: {
+                    Image(systemName: landscape ? "chevron.down" : "xmark").font(.title3.bold()).frame(width: 44, height: 44)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(titleText).font(.headline).lineLimit(1)
                     if pc.isLive { Text("● LIVE").font(.caption.bold()).foregroundStyle(.red) }
@@ -127,8 +144,8 @@ struct PlayerScreen: View {
                     Image(systemName: app.isFav(pc.current) ? "star.fill" : "star").font(.title3).frame(width: 44, height: 44)
                 }
             }
-            .padding(.horizontal, 20).padding(.top, 20)
-            .background(LinearGradient(colors: [.black.opacity(0.7), .clear], startPoint: .top, endPoint: .bottom))
+            .padding(.horizontal, 12).padding(.top, landscape ? 8 : 4)
+            .background(LinearGradient(colors: [.black.opacity(0.7), .clear], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
 
             Spacer()
 
@@ -164,11 +181,17 @@ struct PlayerScreen: View {
                     .tint(.red)
                     Text(fmtTime(Double(pc.lengthMs) / 1000)).font(.caption.monospacedDigit())
                 }
-                .padding(.horizontal, 24).padding(.bottom, 24)
-                .background(LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom))
-            } else {
-                Text("Swipe: daabi baju brightness · jamni baju volume").font(.caption2).foregroundStyle(.white.opacity(0.6))
-                    .padding(.bottom, 20)
+                .padding(.horizontal, 16).padding(.bottom, 8)
+                .background(LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+            }
+            if !landscape {
+                HStack {
+                    Spacer()
+                    Button { toLandscape() } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.title3).frame(width: 44, height: 44)
+                    }
+                }
+                .padding(.horizontal, 12).padding(.bottom, 4)
             }
         }
         .foregroundStyle(.white)
@@ -247,6 +270,24 @@ struct PlayerScreen: View {
         app.closePlayer()
     }
 
+    private func toPortrait() {
+        dlog("player: to portrait")
+        Orientation.set(.allButUpsideDown, prefer: .portrait)
+        scheduleHide()
+    }
+    private func toLandscape() {
+        dlog("player: to landscape")
+        Orientation.set(.allButUpsideDown, prefer: .landscapeRight)
+        scheduleHide()
+    }
+
+    @State private var hintTask: Task<Void, Never>?
+    private func showHint(_ h: String) {
+        hint = h
+        hintTask?.cancel()
+        hintTask = Task { try? await Task.sleep(nanoseconds: 1_200_000_000); if !Task.isCancelled && dragMode == 0 { hint = nil } }
+    }
+
     private func toggleControls() {
         withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
         if showControls { scheduleHide() }
@@ -274,17 +315,16 @@ struct PlayerScreen: View {
                 if dragMode == 1 {
                     let b = min(max(dragStartValue + delta, 0), 1)
                     UIScreen.main.brightness = CGFloat(b)
-                    hint = "☀️ \(Int(b * 100))%"
+                    showHint("☀️ \(Int(b * 100))%")
                 } else if dragMode == 2 {
                     let vol = min(max(dragStartValue + delta, 0), 1)
                     if abs(vol - sysVolume.value) >= 0.01 { sysVolume.value = vol }
-                    hint = (vol == 0 ? "🔇 " : "🔊 ") + "\(Int(vol * 100))%"
+                    showHint((vol == 0 ? "🔇 " : "🔊 ") + "\(Int((vol * 100).rounded()))%")
                 }
             }
             .onEnded { _ in
                 dragMode = 0
-                let h = hint
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { if hint == h { hint = nil } }
+                if let h = hint { showHint(h) }
             }
     }
 }

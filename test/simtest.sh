@@ -33,6 +33,7 @@ run 04a_controls 3 -uitest_play live:1001 -uitest_next_after 19
 sleep 11; xcrun simctl io "$UDID" screenshot "$OUT/04_play_interlaced.png" >/dev/null 2>&1
 sleep 14; xcrun simctl io "$UDID" screenshot "$OUT/05_after_next.png" >/dev/null 2>&1; stop
 run 06_play_ac3 14 -uitest_play live:1000; stop
+run 06b_portrait 9 -uitest_play live:1000 -uitest_portrait_after 6; stop
 run 07_play_hevc 14 -uitest_play live:1002; stop
 run 08_movie_seek 24 -uitest_play movie:5000 -uitest_seekto 100; stop
 # app to home screen while a live channel plays, then back
@@ -73,6 +74,7 @@ chk "movie resume point saved (~100s)" "save pos 5000 1[0-9][0-9]/180"
 cnt() { grep -c "$1" $OUT/app.log; }
 [ "$(cnt 'background: stop 1004')" -ge 1 ] && [ "$(cnt 'PLAYING 1004')" -ge 3 ] && echo "PASS  live: home screen and back plays again" || echo "FAIL  live: home screen and back"
 [ "$(cnt 'foreground: reopen 5000')" -ge 1 ] && grep -A3 "foreground: reopen 5000" $OUT/app.log | grep -q "open movie 5000 .*start=[1-9]" && echo "PASS  movie: back from home continues at same time" || echo "FAIL  movie: back from home resume"
+grep -q "player: to portrait" $OUT/app.log && echo "PASS  X in landscape turns to portrait (see 06b_portrait.png)" || echo "FAIL  to portrait"
 grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"
 grep -q "PLAYING 1003" $OUT/app.log && echo "PASS  close player + open other channel" || echo "FAIL  close + reopen"
 grep -q "PLAYING 1006" $OUT/app.log && echo "PASS  close a stalled stream + open other channel" || echo "FAIL  stalled close + reopen"
