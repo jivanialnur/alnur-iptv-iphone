@@ -34,5 +34,14 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   `-uitest_tab`, `-uitest_open`, `-uitest_next_after`, `-uitest_seekto`) and take screenshots. Results + PNGs go to the
   prerelease `simtest`; download with `gh api .../releases/tags/simtest` + asset ids (artifact host is blocked here).
 - Player is presented with UIKit (`PlayerHost`), NOT SwiftUI fullScreenCover – the cover only allowed portrait.
-- Work is on branch `app-v1` (v1.0.0, all simtest checks pass 2026-11-23); not yet merged to `main`.
-- Not verified on a real iPhone / real server yet.
+  Open/close it ONLY via `AppState.play()` / `closePlayer()`: the tab views are paused under the full-screen player,
+  so a SwiftUI `.onChange`/`.task` there does not run (1.0.1 bug: X stopped the stream but the black player stayed).
+- All blocking VLC calls (stop/play/pause/seek) go through `PlayerController.vlcQueue`, never the main thread.
+- App to background → stream stopped (frees the 1 connection); back to foreground → reopened (VOD at same time), landscape again.
+- Swipe volume = iPhone system volume via hidden MPVolumeView (VLC volume reacted 1–2 s late).
+- ATS: only `NSAllowsArbitraryLoads` – adding `...ForMedia` silently disables it (1.0.0 login bug). Test uses host
+  `iptv-mock.test` (/etc/hosts) because localhost/IPs are exempt from ATS and hid that bug.
+- Test log = app's own `Documents/iptv.log` (+ `HangWatch` main-thread watchdog), copied by simtest.sh.
+- Versions: 1.0.0 first · 1.0.1 ATS/login fix · 1.0.2 X closes player, no freeze, background handling, instant volume.
+- Work is on branch `app-v1` (16/16 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
+- Not verifiable in the simulator: real audio volume swipe, real server streams.
