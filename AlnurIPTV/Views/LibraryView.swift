@@ -68,7 +68,7 @@ struct SettingsView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "person.crop.circle.fill").font(.title2)
-                                    .foregroundStyle(a.key == app.account?.key ? Color.accentColor : .secondary)
+                                    .foregroundStyle(a.key == app.account?.key ? Color.accentColor : Color.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(a.title).foregroundStyle(.primary)
                                     Text("\(a.username) · \(URL(string: a.url)?.host ?? a.url)").font(.caption).foregroundStyle(.secondary)
