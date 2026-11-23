@@ -50,6 +50,7 @@ jobs:
           path: "*.ipa"
 
       - name: Release
+        if: github.ref_name == 'app-v1' || github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -86,5 +87,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd simout || exit 0
-          gh release delete simtest -y --cleanup-tag || true
-          gh release create simtest *.png *.log *.txt --prerelease --title "Simulator test (latest)" --notes "Screenshots from the CI simulator test" --target "${{ github.sha }}"
+          T="simtest-${{ github.ref_name }}"
+          gh release delete "$T" -y --cleanup-tag || true
+          gh release create "$T" *.png *.log *.txt --prerelease --title "Simulator test (latest)" --notes "Screenshots from the CI simulator test" --target "${{ github.sha }}"

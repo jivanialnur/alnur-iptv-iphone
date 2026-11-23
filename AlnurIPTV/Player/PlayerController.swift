@@ -33,6 +33,16 @@ final class PlayerController: ObservableObject {
     private var lastSave = Date()
     private var retrying = false
     private var countdownTask: Task<Void, Never>?
+    private var suspended = false
+    private var resumeAfterBackground: Double?
+    private var observers: [NSObjectProtocol] = []
+
+    /// libVLC stop/play can block (network, decoder threads). Never do them on the main thread.
+    nonisolated static let vlcQueue = DispatchQueue(label: "alnur.vlc", qos: .userInitiated)
+    private func vlc(_ block: @escaping (VLCMediaPlayer) -> Void) {
+        let p = player
+        Self.vlcQueue.async { block(p) }
+    }
 
     var current: Item { queue[index] }
     var isLive: Bool { current.kind == .live }
@@ -50,6 +60,15 @@ final class PlayerController: ObservableObject {
 
     func start() {
         timer?.invalidate()
+        let nc = NotificationCenter.default
+        observers = [
+            nc.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.enterBackground() }
+            },
+            nc.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.enterForeground() }
+            },
+        ]
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -62,7 +81,7 @@ final class PlayerController: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
                 guard let self else { return }
                 dlog("test: seek to \(UITest.seekTo) (len \(self.lengthMs))")
-                self.player.time = VLCTime(int: Int32(UITest.seekTo * 1000))
+                self.vlc { $0.time = VLCTime(int: Int32(UITest.seekTo * 1000)) }
             }
         }
     }
@@ -70,9 +89,39 @@ final class PlayerController: ObservableObject {
     func stop() {
         saveProgress()
         token += 1
+        retrying = true
         countdownTask?.cancel()
         timer?.invalidate(); timer = nil
-        player.stop()
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers = []
+        dlog("player closed \(current.sid)")
+        vlc { $0.stop() }
+    }
+
+    // App goes to the home screen / lock: stop the stream (frees the single server connection,
+    // and iOS does not allow video drawing in the background – that gave the black frozen screen).
+    private func enterBackground() {
+        guard !suspended, timer != nil else { return }
+        saveProgress()
+        suspended = true
+        resumeAfterBackground = isLive ? nil : (timeMs > 0 ? Double(timeMs) / 1000 : app.positions[current.id])
+        token += 1
+        retrying = true
+        countdownTask?.cancel(); nextIn = nil
+        dlog("background: stop \(current.sid)")
+        vlc { $0.stop() }
+    }
+
+    private func enterForeground() {
+        guard suspended else { return }
+        suspended = false
+        attempt = 0; uaIdx = 0; error = nil; finished = false
+        status = "Opening…"
+        token += 1
+        let tok = token
+        let at = resumeAfterBackground
+        dlog("foreground: reopen \(current.sid)")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in self?.open(tok: tok, startAt: at) }
     }
 
     func play(index i: Int) {
@@ -88,7 +137,7 @@ final class PlayerController: ObservableObject {
         retrying = true
         let tok = token
         let wasOpen = player.media != nil
-        player.stop()
+        vlc { $0.stop() }
         let startAt: Double? = isLive ? nil : app.positions[current.id]
         DispatchQueue.main.asyncAfter(deadline: .now() + (wasOpen ? 0.8 : 0)) { [weak self] in
             self?.open(tok: tok, startAt: startAt)
@@ -113,13 +162,13 @@ final class PlayerController: ObservableObject {
         media.addOption(":http-reconnect")
         if let s = startAt, s > 5 { media.addOption(":start-time=\(Int(s))") }
         dlog("open \(current.kind.rawValue) \(current.sid) ua=\(ua) try=\(attempt) start=\(startAt ?? 0)")
-        player.media = media
         gotVideo = false
         openedAt = Date()
-        player.play()
+        vlc { p in p.media = media; p.play() }
     }
 
     private func tick() {
+        if suspended { return }
         isPlaying = player.isPlaying
         let t = Int(player.time.intValue)
         if t > 0 { timeMs = t }
@@ -166,13 +215,13 @@ final class PlayerController: ObservableObject {
             error = isLive
                 ? "Aa channel chali nathi rahyo.\nServer busy hoy (1 connection – PC / tablet bandh karo) athva channel source par kharab chhe."
                 : "Video chali nathi rahyo.\nServer busy hoy (1 connection – PC / tablet bandh karo)."
-            player.stop()
+            vlc { $0.stop() }
             return
         }
         retrying = true
         status = wasPlaying ? "Reconnecting…" : "Connecting… (try \(attempt + 1))"
         let resume: Double? = isLive ? nil : Double(timeMs) / 1000
-        player.stop()
+        vlc { $0.stop() }
         let tok = token
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self, tok == self.token else { return }
@@ -187,7 +236,7 @@ final class PlayerController: ObservableObject {
         token += 1
         retrying = true
         let tok = token
-        player.stop()
+        vlc { $0.stop() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
             self?.open(tok: tok, startAt: (self?.isLive ?? true) ? nil : Double(self?.timeMs ?? 0) / 1000)
         }
@@ -225,26 +274,21 @@ final class PlayerController: ObservableObject {
     // MARK: controls
     func togglePause() {
         if finished { finished = false; play(index: index); return }
-        if player.isPlaying { player.pause() } else { player.play() }
+        if player.isPlaying { vlc { $0.pause() } } else { vlc { $0.play() } }
     }
 
     func seek(by secs: Int) {
         guard !isLive, player.isSeekable else { return }
         let t = max(0, timeMs + secs * 1000)
-        player.time = VLCTime(int: Int32(t))
+        vlc { $0.time = VLCTime(int: Int32(t)) }
         timeMs = t
     }
 
     func seek(fraction f: Double) {
         guard !isLive, lengthMs > 0 else { return }
         let t = Int(Double(lengthMs) * min(max(f, 0), 1))
-        player.time = VLCTime(int: Int32(t))
+        vlc { $0.time = VLCTime(int: Int32(t)) }
         timeMs = t
-    }
-
-    var volume: Float {
-        get { Float(player.audio?.volume ?? 100) / 100 }
-        set { player.audio?.volume = Int32(min(max(newValue, 0), 2) * 100) }
     }
 
     var audioTracks: [Track] {

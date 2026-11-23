@@ -48,5 +48,6 @@ http.createServer((q, s) => {
   const buf = fs.readFileSync(M(f)), bps = buf.length / 30, chunk = 188 * 100; let pos = Math.min(buf.length, Math.floor(bps * 2)), t;
   s.writeHead(200, { 'Content-Type': 'video/mp2t' }); s.write(buf.subarray(0, pos));
   const send = () => { if (s.destroyed) return; const n = Math.min(chunk, buf.length - pos); s.write(buf.subarray(pos, pos + n)); pos += n; if (pos >= buf.length) pos = 0; t = setTimeout(send, n / bps * 1000); };
+  if (sid === '1005') { log('stream 1005 will STALL'); setTimeout(() => clearTimeout(t), 3000); }
   send(); s.on('close', () => clearTimeout(t));
 }).listen(8899, '127.0.0.1', () => log('mock on 8899'));

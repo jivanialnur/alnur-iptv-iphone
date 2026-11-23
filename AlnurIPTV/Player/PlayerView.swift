@@ -1,6 +1,39 @@
 import SwiftUI
 import UIKit
 import MobileVLCKit
+import MediaPlayer
+import AVFoundation
+
+/// iPhone system volume (instant, same as the side buttons). An MPVolumeView must be on screen for this;
+/// it is kept invisible and also hides the big system volume pop-up.
+final class SystemVolume {
+    let view: MPVolumeView = {
+        let v = MPVolumeView(frame: CGRect(x: -2000, y: -2000, width: 1, height: 1))
+        v.alpha = 0.01
+        v.isUserInteractionEnabled = false
+        return v
+    }()
+    private var slider: UISlider? { view.subviews.compactMap { $0 as? UISlider }.first }
+    var value: Float {
+        get { slider?.value ?? AVAudioSession.sharedInstance().outputVolume }
+        set {
+            guard let s = slider else { return }
+            s.value = min(max(newValue, 0), 1)
+            s.sendActions(for: .valueChanged)
+        }
+    }
+}
+
+struct VolumeHost: UIViewRepresentable {
+    let volume: SystemVolume
+    func makeUIView(context: Context) -> UIView {
+        let c = UIView(frame: .zero)
+        c.isUserInteractionEnabled = false
+        c.addSubview(volume.view)
+        return c
+    }
+    func updateUIView(_ uiView: UIView, context: Context) {}
+}
 
 struct VLCVideoView: UIViewRepresentable {
     let player: VLCMediaPlayer
@@ -23,6 +56,7 @@ struct PlayerScreen: View {
     @State private var scrubbing = false
     @State private var scrub: Double = 0
     @State private var hideTask: Task<Void, Never>?
+    @State private var sysVolume = SystemVolume()
 
     init(app: AppState, request: PlayRequest) {
         _pc = StateObject(wrappedValue: PlayerController(app: app, queue: request.queue, index: request.index))
@@ -32,6 +66,7 @@ struct PlayerScreen: View {
         GeometryReader { geo in
             ZStack {
                 Color.black
+                VolumeHost(volume: sysVolume).frame(width: 1, height: 1).allowsHitTesting(false)
                 VLCVideoView(player: pc.player)
 
                 // gestures: tap = show/hide, swipe up/down left = brightness, right = volume
@@ -233,7 +268,7 @@ struct PlayerScreen: View {
                 if dragMode == 0 {
                     guard abs(v.translation.height) > abs(v.translation.width) else { return }
                     dragMode = v.startLocation.x < size.width / 2 ? 1 : 2
-                    dragStartValue = dragMode == 1 ? Float(UIScreen.main.brightness) : pc.volume
+                    dragStartValue = dragMode == 1 ? Float(UIScreen.main.brightness) : sysVolume.value
                 }
                 let delta = Float(-v.translation.height / max(size.height * 0.8, 1))
                 if dragMode == 1 {
@@ -241,8 +276,8 @@ struct PlayerScreen: View {
                     UIScreen.main.brightness = CGFloat(b)
                     hint = "☀️ \(Int(b * 100))%"
                 } else if dragMode == 2 {
-                    let vol = min(max(dragStartValue + delta * 1.5, 0), 2)
-                    pc.volume = vol
+                    let vol = min(max(dragStartValue + delta, 0), 1)
+                    if abs(vol - sysVolume.value) >= 0.01 { sysVolume.value = vol }
                     hint = (vol == 0 ? "🔇 " : "🔊 ") + "\(Int(vol * 100))%"
                 }
             }

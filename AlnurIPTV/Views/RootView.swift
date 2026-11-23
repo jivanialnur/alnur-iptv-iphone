@@ -66,6 +66,17 @@ struct MainTabs: View {
             let q = app.items(k, cat: it.cat)
             dlog("autoplay \(it.name)")
             app.play(q, index: q.firstIndex(of: it) ?? 0)
+            if UITest.closeAfter > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(UITest.closeAfter * 1e9))
+                dlog("test: close player")
+                app.player = nil
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                if let r = UITest.parse(UITest.reopen), let it2 = app.lists[r.0]?.items.first(where: { $0.sid == r.1 }) {
+                    dlog("test: reopen \(it2.sid)")
+                    let q2 = app.items(r.0, cat: it2.cat)
+                    app.play(q2, index: q2.firstIndex(of: it2) ?? 0)
+                }
+            }
         }
     }
 }

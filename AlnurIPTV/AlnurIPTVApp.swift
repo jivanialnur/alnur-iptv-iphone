@@ -7,6 +7,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        if UserDefaults.standard.object(forKey: "uitest_login") != nil || UserDefaults.standard.object(forKey: "uitest_play") != nil
+            || UserDefaults.standard.object(forKey: "uitest_tab") != nil { HangWatch.start() }
         URLCache.shared = URLCache(memoryCapacity: 30 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
         return true
     }
