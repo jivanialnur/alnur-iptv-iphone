@@ -446,10 +446,11 @@ final class PlayerController: NSObject, ObservableObject {
         }
     }
 
-    func setRate(_ r: Float) {
+    func setRate(_ r: Float, quiet: Bool = false) {
         rate = r
         vlc { $0.rate = r }
-        say("Speed \(r == 1 ? "normal" : String(format: "%.2gx", r))")
+        dlog("rate \(r)")
+        if !quiet { say("Speed \(r == 1 ? "normal" : String(format: "%.2gx", r))") }
     }
 
     func setSleep(minutes: Int) {

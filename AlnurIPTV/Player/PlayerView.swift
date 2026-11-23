@@ -83,10 +83,13 @@ struct PlayerScreen: View {
                     VLCVideoView(pc: pc)
 
                     // gestures: tap = show/hide · swipe up/down: left = brightness, right = volume, middle = bigger / smaller / close
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture { toggleControls() }
-                        .gesture(swipe(geo.size))
+                    // movies / episodes: double tap left / right = −10 / +10 s, hold right = 2x speed (like YouTube)
+                    HStack(spacing: 0) {
+                        tapZone(0)
+                        tapZone(1)
+                        tapZone(2)
+                    }
+                    .gesture(swipe(geo.size))
                 }
                 .ignoresSafeArea()
 
@@ -143,6 +146,14 @@ struct PlayerScreen: View {
             if UserDefaults.standard.bool(forKey: "uitest_rec") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 6) { pc.toggleRecording() }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 14) { pc.toggleRecording() }
+            }
+            if let seq = UserDefaults.standard.string(forKey: "uitest_taps") {
+                for (n, d) in seq.split(separator: ",").enumerated() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 10 + Double(n) * 0.4) {
+                        if d == "hold" { startFast(); DispatchQueue.main.asyncAfter(deadline: .now() + 3) { endFast() } }
+                        else { doubleTap(d == "right" ? 2 : 0) }
+                    }
+                }
             }
             if let seq = UserDefaults.standard.string(forKey: "uitest_swipes") {
                 for (n, d) in seq.split(separator: ",").enumerated() {
@@ -425,6 +436,52 @@ struct PlayerScreen: View {
     private func close() {
         pc.stop()
         app.closePlayer()
+    }
+
+    private func tapZone(_ zone: Int) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .gesture(
+                TapGesture(count: 2).onEnded { doubleTap(zone) }
+                    .exclusively(before: TapGesture().onEnded { toggleControls() })
+            )
+            .onLongPressGesture(minimumDuration: 0.5, maximumDistance: 15, perform: {
+                if zone == 2 { startFast() }
+            }, onPressingChanged: { pressing in
+                if !pressing { endFast() }
+            })
+    }
+
+    @State private var tapSum = 0
+    @State private var tapSumTask: Task<Void, Never>?
+    @State private var fastFrom: Float?
+
+    /// double tap: right = +10 s, left = −10 s; quick repeated double taps add up (+20, +30 …)
+    private func doubleTap(_ zone: Int) {
+        guard !pc.isLive, zone != 1 else { toggleControls(); return }
+        let step = zone == 2 ? 10 : -10
+        if (tapSum > 0) != (step > 0) { tapSum = 0 }
+        tapSum += step
+        pc.skip(step)
+        dlog("double tap \(zone == 2 ? "right" : "left") \(step > 0 ? "+" : "")\(step) (total \(tapSum))")
+        showHint(tapSum > 0 ? "⏩ +\(tapSum) s" : "⏪ \(tapSum) s")
+        tapSumTask?.cancel()
+        tapSumTask = Task { try? await Task.sleep(nanoseconds: 1_000_000_000); if !Task.isCancelled { tapSum = 0 } }
+    }
+
+    /// hold on the right side = 2x speed while held
+    private func startFast() {
+        guard !pc.isLive, fastFrom == nil else { return }
+        fastFrom = pc.rate
+        pc.setRate(2, quiet: true)
+        hint = "2x ⏩"
+        hintTask?.cancel()
+    }
+    private func endFast() {
+        guard let r = fastFrom else { return }
+        fastFrom = nil
+        pc.setRate(r, quiet: true)
+        hint = nil
     }
 
     /// YouTube-like middle swipe: up = bigger, down = smaller / close.

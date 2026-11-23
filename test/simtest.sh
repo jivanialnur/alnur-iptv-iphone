@@ -52,6 +52,7 @@ run 07s_swipes 28 -uitest_play live:1004 -uitest_swipes up,down,down,up,down,dow
 run 07b_record 10 -uitest_play live:1004 -uitest_rec YES
 sleep 10; xcrun simctl io "$UDID" screenshot "$OUT/07c_after_rec.png" >/dev/null 2>&1; stop
 run 08_movie_seek 24 -uitest_play movie:5000 -uitest_seekto 100; stop
+run 08t_taps 18 -uitest_play movie:5001 -uitest_taps right,right,left,hold; stop
 # app to home screen while a live channel plays, then back
 run 11a_bg_live 12 -uitest_play live:1004
 mark "home screen"; xcrun simctl launch "$UDID" com.apple.Preferences >/dev/null; sleep 8
@@ -106,6 +107,9 @@ sed -n "/=== 07s_swipes/,/=== 07b/p" $OUT/app.log | grep -o "middle swipe.*\|aft
 EXP="middle swipe up landscape=true|after swipe: landscape=true aspect=Fill|middle swipe down landscape=true|after swipe: landscape=true aspect=Fit|middle swipe down landscape=true|player: to portrait|after swipe: landscape=false aspect=Fit|middle swipe up landscape=false|player: to landscape|after swipe: landscape=true aspect=Fit|middle swipe down landscape=true|player: to portrait|after swipe: landscape=false aspect=Fit|middle swipe down landscape=false|player closed 1004"
 GOT=$(grep -v "^$" /tmp/sw.txt | tr '\n' '|' | sed 's/|$//')
 [ "$GOT" = "$EXP" ] && echo "PASS  middle swipe: up=zoom/full screen, down=unzoom/upright/close" || { echo "FAIL  middle swipe"; echo "   got: $GOT"; }
+sed -n "/=== 08t_taps/,/=== 1[0-9a-z_]*:/p" $OUT/app.log > /tmp/tp.txt
+grep -q "double tap right +10 (total 10)" /tmp/tp.txt && grep -q "double tap right +10 (total 20)" /tmp/tp.txt && grep -q "double tap left -10 (total -10)" /tmp/tp.txt && echo "PASS  double tap: right +10 (adds up to +20), left -10" || echo "FAIL  double tap"
+grep -q "rate 2.0" /tmp/tp.txt && grep -q "rate 1.0" /tmp/tp.txt && echo "PASS  hold right: 2x speed, back to normal on release" || echo "FAIL  hold 2x"
 grep -q "player: to portrait" $OUT/app.log && echo "PASS  X in landscape turns to portrait (see 06b_portrait.png)" || echo "FAIL  to portrait"
 grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"
 grep -q "PLAYING 1003" $OUT/app.log && echo "PASS  close player + open other channel" || echo "FAIL  close + reopen"
