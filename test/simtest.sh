@@ -24,7 +24,7 @@ run() { # name seconds args... ; screenshot at the end
 }
 stop() { xcrun simctl terminate "$UDID" $BID 2>/dev/null; sleep 2; }
 
-LOGIN="http://127.0.0.1:8899|demo|demo"
+LOGIN="http://iptv-mock.test:8899|demo|demo"
 run 01_live 25 -uitest_reset YES -uitest_login "$LOGIN"; stop
 run 02_movies 10 -uitest_tab movie; stop
 run 03_series_detail 10 -uitest_tab series -uitest_open series:700; stop
@@ -40,7 +40,8 @@ run 10_settings 6 -uitest_tab settings; stop
 kill $LOGPID 2>/dev/null
 echo; echo "==== RESULTS"
 chk() { if grep -q "$2" $OUT/app.log; then echo "PASS  $1"; else echo "FAIL  $1"; fi; }
-chk "login" "login ok"
+chk "login (http, ATS)" "login ok"
+if grep -q "App Transport Security" $OUT/app.log; then echo "FAIL  ATS blocked http"; else echo "PASS  no ATS block"; fi
 chk "live list" "list live: 300 items"
 chk "movie list" "list movie: 60 items"
 chk "interlaced 1080i AC3/MP2 plays" "PLAYING 1001"

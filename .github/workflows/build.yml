@@ -74,6 +74,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build > sim-build.log 2>&1 || { grep -E "error:" sim-build.log | sort -u | head -60; tail -30 sim-build.log; exit 1; }
       - name: Run app in simulator against mock server
         run: |
+          echo "127.0.0.1 iptv-mock.test" | sudo tee -a /etc/hosts
+          sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder || true
           node test/mock.js > mock.log 2>&1 &
           sleep 2
           test/simtest.sh build/Build/Products/Debug-iphonesimulator/AlnurIPTV.app 2>&1 | tee simtest.txt
