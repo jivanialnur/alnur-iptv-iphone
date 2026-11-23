@@ -231,6 +231,7 @@ struct PlayerScreen: View {
         HStack(spacing: 8) {
             if pc.isLive { GlassPill(title: recTitle, system: "record.circle", tint: pc.recording ? .red : .white, showTitle: labels) { pc.toggleRecording(); scheduleHide() } }
             GlassPill(title: "Link", system: "link", showTitle: labels) { pc.copyLink(); scheduleHide() }
+            if !pc.isLive { GlassPill(title: "Download", system: "arrow.down.circle", showTitle: labels) { app.download(pc.current) } }
             if pc.isLive { GlassPill(title: "TV Guide", system: "info.circle", showTitle: labels) { showGuide = true } }
             GlassPill(title: "Open in VLC", system: "arrow.up.forward.app", showTitle: labels) { pc.openInVLC() }
             GlassIcon(system: app.isFav(pc.current) ? "star.fill" : "star", tint: app.isFav(pc.current) ? .yellow : .white, label: "Favourite") { app.toggleFav(pc.current) }
@@ -317,6 +318,7 @@ struct PlayerScreen: View {
                 Button { showGuide = true } label: { Label("TV Guide", systemImage: "info.circle") }
             }
             Button { pc.copyLink() } label: { Label("Link copy karo", systemImage: "link") }
+            if !pc.isLive { Button { app.download(pc.current) } label: { Label("Download", systemImage: "arrow.down.circle") } }
             Button { pc.openInVLC() } label: { Label("Open in VLC", systemImage: "arrow.up.forward.app") }
         } label: { GlassMenuLabel(system: "ellipsis") }
     }

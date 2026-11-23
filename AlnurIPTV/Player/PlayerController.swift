@@ -230,7 +230,7 @@ final class PlayerController: NSObject, ObservableObject {
     private func open(tok: Int, startAt: Double?) {
         guard tok == token else { return }
         retrying = false
-        guard let acc = app.account, let url = Xtream.streamURL(current, acc: acc, format: app.settings.liveFormat) else {
+        guard let acc = app.account, let url = Downloads.shared.localURL(for: current) ?? Xtream.streamURL(current, acc: acc, format: app.settings.liveFormat) else {
             error = "Aa item mate link nathi"; status = nil; return
         }
         let uas = uaList
@@ -242,7 +242,7 @@ final class PlayerController: NSObject, ObservableObject {
         media.addOption(":http-reconnect")
         pendingStart = (startAt ?? 0) > 5 ? startAt : nil
         eventLengthMs = 0
-        dlog("open \(current.kind.rawValue) \(current.sid) ua=\(ua) try=\(attempt) start=\(startAt ?? 0)")
+        dlog("open \(current.kind.rawValue) \(current.sid)\(url.isFileURL ? " LOCAL-FILE" : "") ua=\(ua) try=\(attempt) start=\(startAt ?? 0)")
         gotVideo = false
         openedAt = Date()
         vlc { p in p.media = media; p.play() }

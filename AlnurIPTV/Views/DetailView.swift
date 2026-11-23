@@ -56,6 +56,8 @@ struct MovieDetail: View {
                     .buttonStyle(.bordered)
                     .listRowSeparator(.hidden)
                 }
+                DownloadButton(item: movie)
+                    .listRowSeparator(.hidden)
                 Button { app.toggleFav(movie) } label: {
                     Label(app.isFav(movie) ? "Favourites mathi kadho" : "Favourites ma umero", systemImage: app.isFav(movie) ? "star.fill" : "star")
                         .frame(maxWidth: .infinity)
@@ -137,6 +139,8 @@ struct SeriesDetail: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .swipeActions { Button { app.download(ep) } label: { Label("Download", systemImage: "arrow.down.circle") }.tint(.blue) }
+                        .contextMenu { Button { app.download(ep) } label: { Label("Download", systemImage: "arrow.down.circle") } }
                     }
                 }
             } else if let error {
@@ -169,5 +173,31 @@ struct SeriesDetail: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// Download / progress / downloaded state for a movie.
+struct DownloadButton: View {
+    @EnvironmentObject var app: AppState
+    @ObservedObject var dl = Downloads.shared
+    let item: Item
+
+    var body: some View {
+        let e = dl.entry(for: item)
+        Button {
+            if e?.state != .running { app.download(item) }
+        } label: {
+            Group {
+                switch e?.state {
+                case .running?, .waiting?: Label("Download thay chhe… \(Int((e?.progress ?? 0) * 100))%", systemImage: "arrow.down.circle")
+                case .done?: Label("Download thayelu chhe (offline)", systemImage: "checkmark.circle.fill")
+                case .failed?: Label("Download fari try karo", systemImage: "arrow.clockwise.circle")
+                default: Label("Download", systemImage: "arrow.down.circle")
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .disabled(e?.state == .done)
     }
 }

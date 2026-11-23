@@ -57,6 +57,17 @@ final class AppState: ObservableObject {
     private func listFile(_ k: Kind) -> URL { listDir.appendingPathComponent("\(k.rawValue).json") }
 
     var apiUA: String { account?.apiUA ?? API_UAS[0] }
+    var streamUA: String { account?.streamUA ?? STREAM_UAS[0] }
+
+    /// Download a movie / episode (stops the player first: the server allows only one connection).
+    func download(_ it: Item) {
+        guard let acc = account else { return }
+        if player != nil { closePlayer() }
+        let ua = streamUA
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.show(Downloads.shared.start(it, acc: acc, ua: ua))
+        }
+    }
 
     func show(_ msg: String) {
         toast = msg

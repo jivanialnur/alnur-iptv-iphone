@@ -13,8 +13,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             TestLog.enabled = true
             HangWatch.start()
         }
+        _ = Downloads.shared
         URLCache.shared = URLCache(memoryCapacity: 30 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
         return true
+    }
+
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        if identifier == Downloads.sessionID { Downloads.shared.backgroundDone = completionHandler }
     }
 
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {

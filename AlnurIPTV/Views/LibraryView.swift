@@ -7,6 +7,7 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             List {
+                DownloadsSection()
                 if !app.cont.isEmpty {
                     Section("Continue Watching") {
                         ForEach(app.cont) { it in ItemLink(item: it, queue: [it], index: 0) }
@@ -34,7 +35,7 @@ struct LibraryView: View {
                 }
             }
             .overlay {
-                if app.cont.isEmpty && app.favs.isEmpty && app.recent.isEmpty {
+                if app.cont.isEmpty && app.favs.isEmpty && app.recent.isEmpty && Downloads.shared.entries.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: "star").font(.largeTitle).foregroundStyle(.secondary)
                         Text("Haju kai nathi.\nChannel / movie par left swipe karine ★ favourite karo.")

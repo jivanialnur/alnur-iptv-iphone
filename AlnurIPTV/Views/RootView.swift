@@ -53,6 +53,14 @@ struct MainTabs: View {
         }
         .task { await app.refreshAccount() }
         .task {
+            if let t = UITest.parse(UserDefaults.standard.string(forKey: "uitest_download")) {
+                await app.ensure(t.0)
+                if let it = app.lists[t.0]?.items.first(where: { $0.sid == t.1 }) {
+                    if Downloads.shared.localURL(for: it) != nil { dlog("test: play downloaded"); app.play([it], index: 0) }
+                    else { app.download(it) }
+                }
+                return
+            }
             guard !UITest.autoplayDone, let t = UITest.parse(UITest.play) else { return }
             UITest.autoplayDone = true
             let (k, id) = t

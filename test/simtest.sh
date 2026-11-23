@@ -69,6 +69,9 @@ xcrun simctl io "$UDID" screenshot "$OUT/13_close_reopen.png" >/dev/null 2>&1; s
 # close while the server has stopped sending (stalled connection), then open another
 run 14_stall_close 24 -uitest_play live:1005 -uitest_close_after 9 -uitest_reopen live:1006
 xcrun simctl io "$UDID" screenshot "$OUT/14_after_stall.png" >/dev/null 2>&1; stop
+run 15_download 40 -uitest_tab library -uitest_download movie:5000
+xcrun simctl io "$UDID" screenshot "$OUT/15b_downloads.png" >/dev/null 2>&1; stop
+run 16_play_offline 15 -uitest_download movie:5000; stop
 run 09_library 8 -uitest_tab library; stop
 run 10_settings 6 -uitest_tab settings; stop
 
@@ -96,6 +99,8 @@ grep -q "PiP stop (app back)" /tmp/p11 && echo "PASS  live: back to app → PiP 
 grep -q "PiP: true" /tmp/p12 && echo "PASS  movie: home swipe → PiP" || echo "FAIL  movie: PiP did not start"
 { grep -q "PiP: true" /tmp/p12 || grep -A3 "foreground: reopen 5000" /tmp/p12 | grep -q "open movie 5000 .*start=[1-9]"; } && echo "PASS  movie: back from home continues at same time" || echo "FAIL  movie: back from home resume"
 grep -q "recording saved .* bytes=[1-9]" $OUT/app.log && echo "PASS  Rec: recording file saved ($(grep -o 'recording saved.*' $OUT/app.log | head -1))" || echo "FAIL  Rec: no recording file"
+grep -q "download done movie:5000 bytes=[1-9]" $OUT/app.log && echo "PASS  Download: movie saved ($(grep -o 'download done.*' $OUT/app.log | head -1))" || echo "FAIL  Download: not saved"
+grep -q "open movie 5000 LOCAL-FILE" $OUT/app.log && grep -A3 "open movie 5000 LOCAL-FILE" $OUT/app.log | grep -q "PLAYING 5000" && echo "PASS  Download: plays offline from the iPhone" || echo "FAIL  Download: offline play"
 grep -q "player: to portrait" $OUT/app.log && echo "PASS  X in landscape turns to portrait (see 06b_portrait.png)" || echo "FAIL  to portrait"
 grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"
 grep -q "PLAYING 1003" $OUT/app.log && echo "PASS  close player + open other channel" || echo "FAIL  close + reopen"
