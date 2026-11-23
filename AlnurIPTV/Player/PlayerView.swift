@@ -126,7 +126,6 @@ struct PlayerScreen: View {
             }
             .onAppear { pc.viewSize = geo.size }
             .onChange(of: geo.size) { s in pc.viewSize = s; if pc.aspect == .fill { pc.applyAspect() } }
-            }
         }
         .background(Color.black.ignoresSafeArea())
         .animation(.easeInOut(duration: 0.2), value: pc.message)
