@@ -73,6 +73,14 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   · 1.3.2 double tap left/right = −10/+10 s (adds up), hold right = 2x. · 1.3.3 short title keeps labelled buttons.
   1.3.3 sent in chat 2026-11-23 (PC was off). simtest: all pass except PiP (sim), Intel MAIN HANG at launch, and
   timing flukes (search) from the slow Intel simulator.
-  Next: ask him whether PiP works on the iPhone and how 1.3.3 feels; then merge vlc4 → main.
+  · 1.3.4 grey buffered part on the VOD bar (`ScrubBar`, VLCMedia.Stats readBytes − demuxReadBytes over the measured
+  byte rate; 64 MB prefetch). · 1.4.0 several users (Settings → Users; favourites / history stored per user key
+  `username@host|…`, old data migrated to the first user). · 1.4.1 ALL UI text in English (his wish – keep it that way),
+  confirmation dialogs attached to their buttons (iOS 26 shows them as popovers). · 1.5.0 Sound: boost 100–200 % via VLC
+  `compressor` (limiter + make-up gain) and auto-level via `normvol`; set as media options, so a change reopens the
+  stream (`pc.applySound()` → retry); right panel (landscape) / bottom sheet (portrait) + Settings; AppSettings decodes
+  missing keys. · 1.5.1 ⬇ visible in the portrait player and on each episode row.
+  1.5.1 delivered 2026-11-24 (Downloads + chat). iOS 18 simtest needs a long first launch on fresh runner images
+  (now waits for "list live:"). Next: his iPhone feedback (PiP, sound, downloads), then merge vlc4 → main.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.
