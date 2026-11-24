@@ -38,6 +38,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
     private var tasks: [String: URLSessionTask] = [:]
     private var bgIds = Set<String>()
     private var lastPublish: [String: Date] = [:]
+    private var lastSpeedLog: [String: Date] = [:]
     private var speedMark: [String: (Date, Int64)] = [:]
     private var fallbackTried = Set<String>()
     // delegate queue only
@@ -299,7 +300,8 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
             // publishing on every chunk would flood SwiftUI – twice a second is enough
             let last = self.lastPublish[id] ?? .distantPast
             guard now.timeIntervalSince(last) > 0.5 else { return }
-            if now.timeIntervalSince(last) > 5 {
+            if speed > 0, now.timeIntervalSince(self.lastSpeedLog[id] ?? .distantPast) > 5 {
+                self.lastSpeedLog[id] = now
                 dlog(String(format: "download progress %@ %lld bytes %.2f MB/s", id, bytes, speed / 1_048_576))
             }
             self.lastPublish[id] = now
@@ -436,7 +438,8 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
                 Remuxer.shared.remux(src, to: out, progress: { self.photoProgress = $0 }) { ok in
                     let compatible = ok && UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(out.path)
                     dlog("photos: remux ok=\(ok) compatible=\(compatible)")
-                    if compatible {
+                    if ok {
+                        // the check above is strict – let Photos itself decide
                         self.addToPhotos(out, id: e.id, temp: true, done: done)
                     } else {
                         try? FileManager.default.removeItem(at: out)
@@ -470,10 +473,29 @@ final class Remuxer: NSObject {
     private var player: VLCMediaPlayer?
     private var timer: Timer?
 
+    /// top-level boxes of an MP4 file (ftyp, moov, mdat …) – for the log
+    static func boxes(_ url: URL) -> [String] {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return [] }
+        defer { try? h.close() }
+        var out: [String] = [], pos: UInt64 = 0
+        let end = (try? h.seekToEnd()) ?? 0
+        while pos + 8 <= end, out.count < 12 {
+            try? h.seek(toOffset: pos)
+            guard let d = try? h.read(upToCount: 16), d.count >= 8 else { break }
+            var size = UInt64(d[0]) << 24 | UInt64(d[1]) << 16 | UInt64(d[2]) << 8 | UInt64(d[3])
+            let type = String(decoding: d[4..<8], as: UTF8.self)
+            if size == 1, d.count >= 16 { size = d[8..<16].reduce(0) { $0 << 8 | UInt64($1) } }
+            out.append(type)
+            if size < 8 { break }
+            pos += size
+        }
+        return out
+    }
+
     func remux(_ src: URL, to out: URL, progress: @escaping (Double) -> Void, done: @escaping (Bool) -> Void) {
         guard let media = VLCMedia(url: src) else { done(false); return }
+        // first video + first audio track, MP4 container, written to a file (VLC closes the file properly at the end)
         media.addOption(":sout=#std{access=file,mux=mp4,dst=\"\(out.path)\"}")
-        media.addOption(":sout-keep")
         media.addOption(":no-sout-spu")
         let p = VLCMediaPlayer()
         p.media = media
@@ -486,14 +508,20 @@ final class Remuxer: NSObject {
             progress(Double(min(max(p.position, 0), 1)))
             let age = Date().timeIntervalSince(started)
             let ended = p.state == .stopped && age > 2
-            if ended || p.state == .error || age > 1800 {
-                t.invalidate()
-                self.player = nil
-                let state = p.state
-                DispatchQueue.global().async { p.stop() }
-                let size = (try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int64) ?? 0
-                dlog("remux finished state=\(state.rawValue) bytes=\(size)")
-                done(size > 0 && state != .error)
+            guard ended || p.state == .error || age > 1800 else { return }
+            t.invalidate()
+            self.player = nil
+            let state = p.state
+            // stop() tears down the stream output, which writes the MP4 index (moov) – wait for it
+            DispatchQueue.global(qos: .userInitiated).async {
+                p.stop()
+                p.media = nil
+                Thread.sleep(forTimeInterval: 0.8)
+                DispatchQueue.main.async {
+                    let size = (try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int64) ?? 0
+                    dlog("remux finished state=\(state.rawValue) bytes=\(size) boxes=\(Self.boxes(out))")
+                    done(size > 0 && state != .error)
+                }
             }
         }
     }

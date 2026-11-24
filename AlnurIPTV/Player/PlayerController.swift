@@ -445,6 +445,16 @@ final class PlayerController: NSObject, ObservableObject {
         let st: VLCMedia.Stats = media.statistics
         let read: Int64 = Int64(truncatingIfNeeded: st.readBytes)
         let demux: Int64 = Int64(truncatingIfNeeded: st.demuxReadBytes)
+        if needBufferBase {
+            // just started / seeked: VLC's counters still include what it threw away at the seek –
+            // from now on only count what is read after this point
+            bufferBase = read - demux
+            needBufferBase = false
+            lastTimeForRate = timeMs; lastDemux = demux
+            dlog("buffer base after seek/start: \(read - demux) bytes left out, at \(timeMs / 1000)s")
+            bufferedMs = timeMs
+            return
+        }
         // byte rate of the video itself (bytes demuxed per ms of playback), smoothed
         let dt = timeMs - lastTimeForRate
         let db = Int(demux - lastDemux)
@@ -452,16 +462,8 @@ final class PlayerController: NSObject, ObservableObject {
             let r = Double(db) / Double(dt)
             bytesPerMs = bytesPerMs == 0 ? r : bytesPerMs * 0.8 + r * 0.2
         }
-        if !needBufferBase && (dt > 400 || dt < 0) { lastTimeForRate = timeMs; lastDemux = demux }
-        guard bytesPerMs > 0, !needBufferBase else { bufferedMs = timeMs; return }
-        if needBufferBase {
-            // wait ~1 s after the seek so VLC has dropped its old read-ahead, then take the new zero point
-            if lastTimeForRate == 0 { lastTimeForRate = -1; return }
-            bufferBase = read - demux
-            needBufferBase = false
-            dlog("buffer base after seek/start: \(read - demux) bytes left out, at \(timeMs / 1000)s")
-            lastTimeForRate = timeMs; lastDemux = demux
-        }
+        if dt > 400 || dt < 0 { lastTimeForRate = timeMs; lastDemux = demux }
+        guard bytesPerMs > 0 else { bufferedMs = timeMs; return }
         let aheadBytes = Double(max(read - demux - (bufferBase ?? 0), 0))
         let aheadMs = Int(aheadBytes / bytesPerMs) + app.settings.caching
         bufferedMs = min(lengthMs, timeMs + aheadMs)
