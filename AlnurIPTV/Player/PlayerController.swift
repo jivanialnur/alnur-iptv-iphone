@@ -43,7 +43,7 @@ final class PlayerController: NSObject, ObservableObject {
     @Published var pipAvailable = false
     @Published var pipActive = false { didSet { PlayerController.pipNow = pipActive } }
     /// PiP window open somewhere (the app keeps running then)
-    static var pipNow = false
+    nonisolated(unsafe) static var pipNow = false
     private var pipRequested = false
     // extra player features (1.2)
     enum AspectMode: Int, CaseIterable { case fit, fill, wide, classic
