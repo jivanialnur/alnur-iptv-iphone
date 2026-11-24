@@ -558,7 +558,7 @@ struct DownloadsSection: View {
                             }
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.plain)
                         Spacer(minLength: 0)
                         actionButton(e)
                     }

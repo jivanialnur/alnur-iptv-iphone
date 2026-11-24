@@ -80,7 +80,19 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   `compressor` (limiter + make-up gain) and auto-level via `normvol`; set as media options, so a change reopens the
   stream (`pc.applySound()` → retry); right panel (landscape) / bottom sheet (portrait) + Settings; AppSettings decodes
   missing keys. · 1.5.1 ⬇ visible in the portrait player and on each episode row.
-  1.5.1 delivered 2026-11-24 (Downloads + chat). iOS 18 simtest needs a long first launch on fresh runner images
+  1.5.1 delivered 2026-11-24 (Downloads + chat).
+  · 1.6.0 (his 8-point list): Login/Add user has "Xtream Codes | M3U link" (`M3U.swift`: get.php link → Xtream login,
+  other playlists parsed – live by group-title, file links → Movies; `Item.url` direct link, `Account.m3u`).
+  Volume boost = VLC equalizer pre-amp (`player.equalizer`, flat, 200 % = +10 dB, applied live, no reopen) + compressor
+  as limiter (media options; whether a media `:audio-filter` really applies is unverified). Auto-level REMOVED (his wish).
+  Fill = `player.scaleFactor` = cover zoom from videoSize/view px (redone after rotation / when size known).
+  Rotation bug (video small, left) → `PiPVideoView.layoutSubviews` keeps VLC subviews/sublayers = bounds.
+  Grey buffer: baseline (read − demux) taken at start/after every seek. Time label tap = total ⇄ −remaining (UserDefaults).
+  Downloads rewritten: foreground = URLSessionDataTask + Range into Application Support/parts/<id>.part (pause/resume
+  from bytes on the phone, no ETag needed); app to background → rest via background session (Range), back → normal
+  again; MB/s; "Save to Photos" (mp4 direct, else VLC sout `#std{access=file,mux=mp4}` remux, then PHPhotoLibrary addOnly).
+  Mock: movie 5001 is throttled ≈1 MB/s (pause test), `/playlist.m3u` + `/get.php`. Hooks: `-uitest_dl_pause`,
+  `-uitest_photos`, `-uitest_aspect fill`, `-uitest_add_m3u "Name|link"`. iOS 18 simtest needs a long first launch on fresh runner images
   (now waits for "list live:"). Next: his iPhone feedback (PiP, sound, downloads), then merge vlc4 → main.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.
