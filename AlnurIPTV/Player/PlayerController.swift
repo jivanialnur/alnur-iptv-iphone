@@ -41,14 +41,15 @@ final class PlayerController: NSObject, ObservableObject {
     // Picture in Picture (VLCKit 4)
     private var pip: VLCPictureInPictureWindowControlling?
     @Published var pipAvailable = false
-    @Published var pipActive = false
+    @Published var pipActive = false { didSet { PlayerController.pipNow = pipActive } }
+    /// PiP window open somewhere (the app keeps running then)
+    static var pipNow = false
     private var pipRequested = false
     // extra player features (1.2)
     enum AspectMode: Int, CaseIterable { case fit, fill, wide, classic
         var title: String { ["Fit", "Fill", "16:9", "4:3"][rawValue] }
     }
-    @Published var aspect: AspectMode = .fit { didSet { fillApplied = false } }
-    private var fillApplied = false
+    @Published var aspect: AspectMode = .fit
     @Published var muted = false
     @Published var rate: Float = 1
     @Published var recording = false
@@ -272,8 +273,7 @@ final class PlayerController: NSObject, ObservableObject {
 
     private func tick() {
         if suspended { return }
-        // Fill needs the picture size, which VLC only knows a moment after the start
-        if aspect == .fill, !fillApplied, player.videoSize.width > 0 { fillApplied = true; applyAspect() }
+        refreshFill()
         if let s = sleepAt, Date() >= s { dlog("sleep timer: close"); sleepAt = nil; stop(); app.closePlayer(); return }
         if isLive, let st = playStart {
             if player.state == .paused, pausedSince == nil { pausedSince = Date() }
@@ -538,22 +538,35 @@ final class PlayerController: NSObject, ObservableObject {
         say("Screen: \(aspect.title)")
     }
 
+    /// the view VLC draws into (set by VLCVideoView)
+    weak var videoView: PiPVideoView?
+    private var lastFillInfo = ""
+
     func applyAspect() {
         let mode = aspect
-        // screen size in pixels and the picture size → zoom that covers the whole screen (edges cut off)
-        let scale = UIScreen.main.scale
-        let vw = Double(viewSize.width * scale), vh = Double(viewSize.height * scale)
-        let pic = player.videoSize
-        let fill: Float = pic.width > 0 && pic.height > 0 && vw > 0 ? Float(max(vw / Double(pic.width), vh / Double(pic.height))) : 0
-        dlog("aspect \(mode.title) view=\(Int(vw))x\(Int(vh)) video=\(Int(pic.width))x\(Int(pic.height)) zoom=\(fill)")
+        // Fit / Fill are done on the video layer itself (VLC 4's own zoom is ignored by its iOS video output)
+        videoView?.fillMode = mode == .fill
         vlc { p in
             p.setCropRatioWithNumerator(0, denominator: 0)
+            p.scaleFactor = 0
             switch mode {
-            case .fit: p.videoAspectRatio = nil; p.scaleFactor = 0
-            case .fill: p.videoAspectRatio = nil; p.scaleFactor = fill
-            case .wide: p.scaleFactor = 0; p.videoAspectRatio = "16:9"
-            case .classic: p.scaleFactor = 0; p.videoAspectRatio = "4:3"
+            case .fit, .fill: p.videoAspectRatio = nil
+            case .wide: p.videoAspectRatio = "16:9"
+            case .classic: p.videoAspectRatio = "4:3"
             }
+        }
+        refreshFill(force: true)
+    }
+
+    /// VLC may create / replace its video layer at any time (start, new stream, rotation): keep Fill / Fit on it
+    func refreshFill(force: Bool = false) {
+        guard let v = videoView else { return }
+        let s = player.videoSize
+        if s.width > 0 { v.videoSize = s }
+        let info = v.applyFill()
+        if force || info != lastFillInfo {
+            lastFillInfo = info
+            dlog("aspect \(aspect.title) view=\(Int(v.bounds.width))x\(Int(v.bounds.height)) video=\(Int(s.width))x\(Int(s.height)) \(info)")
         }
     }
 

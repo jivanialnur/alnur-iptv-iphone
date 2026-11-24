@@ -2,6 +2,66 @@ import Foundation
 import SwiftUI
 import Photos
 import VLCKit
+import AVFoundation
+
+/// iOS slows background downloads down a lot (its download service gets little time when the app is closed /
+/// phone locked). While a download runs and the app is in the background, a silent sound keeps the app
+/// awake, so the normal fast download simply continues. Mixes with other apps (music keeps playing).
+final class KeepAwake {
+    static let shared = KeepAwake()
+    private var player: AVAudioPlayer?
+    private(set) var on = false
+    var onInterrupted: (() -> Void)?
+
+    private init() {
+        NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
+            guard let self, self.on, let t = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: t) == .began else { return }
+            dlog("keep-awake interrupted (another app took the sound)")
+            self.onInterrupted?()
+        }
+    }
+
+    /// 1 s of silence as a WAV file in memory
+    private static let silence: Data = {
+        let rate = 8000, n = rate
+        var d = Data()
+        func u32(_ v: Int) { var x = UInt32(v).littleEndian; d.append(Data(bytes: &x, count: 4)) }
+        func u16(_ v: Int) { var x = UInt16(v).littleEndian; d.append(Data(bytes: &x, count: 2)) }
+        d.append("RIFF".data(using: .ascii)!); u32(36 + n * 2); d.append("WAVEfmt ".data(using: .ascii)!)
+        u32(16); u16(1); u16(1); u32(rate); u32(rate * 2); u16(2); u16(16)
+        d.append("data".data(using: .ascii)!); u32(n * 2); d.append(Data(count: n * 2))
+        return d
+    }()
+
+    @discardableResult
+    func start() -> Bool {
+        if on { return true }
+        do {
+            let s = AVAudioSession.sharedInstance()
+            try s.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try s.setActive(true)
+            let p = try AVAudioPlayer(data: Self.silence)
+            p.numberOfLoops = -1
+            p.volume = 0.05
+            guard p.play() else { dlog("keep-awake: could not start"); return false }
+            player = p; on = true
+            dlog("keep-awake on (download continues at full speed in the background)")
+            return true
+        } catch {
+            dlog("keep-awake failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func stop() {
+        guard on else { return }
+        player?.stop(); player = nil; on = false
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        dlog("keep-awake off")
+    }
+}
 
 /// Movie / episode downloads.
 /// - While the app is open: a normal download into a .part file (fastest – iOS's background service is often throttled).
@@ -108,6 +168,11 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
             }
         }
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.enteredBackground()
+        }
+        KeepAwake.shared.onInterrupted = { [weak self] in
+            // the silent sound was stopped by another app: hand over to iOS's download service
+            KeepAwake.shared.stop()
             self?.moveRunningToBackground()
         }
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
@@ -121,8 +186,10 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
 
     private func update(_ id: String, _ f: (inout DownloadEntry) -> Void) {
         guard let i = entries.firstIndex(where: { $0.id == id }) else { return }
+        let was = entries[i].state
         f(&entries[i])
         save()
+        if was == .running && entries[i].state != .running { checkKeepAwake() }
     }
 
     func entry(for it: Item) -> DownloadEntry? { entries.first { $0.id == it.id } }
@@ -206,9 +273,25 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
         if let f = e.file { try? FileManager.default.removeItem(at: Self.dir.appendingPathComponent(f)) }
         entries.removeAll { $0.id == e.id }
         save()
+        checkKeepAwake()
     }
 
-    /// Leaving the app: hand running downloads to the background service (continues from the same byte).
+    private var hasRunning: Bool { entries.contains { $0.state == .running } }
+
+    /// Leaving the app with a download running: keep the app awake so the fast download goes on;
+    /// if that is not possible, hand it to iOS's (slower) background download service.
+    private func enteredBackground() {
+        guard hasRunning else { return }
+        if PlayerController.pipNow { dlog("download continues (PiP keeps the app running)"); return }
+        if !KeepAwake.shared.start() { moveRunningToBackground() }
+    }
+
+    /// nothing left to download → no need to keep the app awake
+    private func checkKeepAwake() {
+        if KeepAwake.shared.on && !hasRunning { KeepAwake.shared.stop() }
+    }
+
+    /// Hand running downloads to the background service (continues from the same byte).
     private func moveRunningToBackground() {
         let running = entries.filter { $0.state == .running && !bgIds.contains($0.id) && tasks[$0.id] != nil }
         guard !running.isEmpty else { return }
@@ -225,6 +308,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
 
     /// Back in the app: background transfers are often slow – continue them in the fast normal way.
     private func moveBackToForeground() {
+        KeepAwake.shared.stop()
         let ids = bgIds.filter { id in entries.first { $0.id == id }?.state == .running }
         guard !ids.isEmpty else { return }
         dlog("download back to normal session: \(ids)")
@@ -453,9 +537,21 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
 
     private func addToPhotos(_ file: URL, id: String, temp: Bool, done: @escaping (String) -> Void) {
         photoBusy = id
+        Task {
+            // what Photos will see: picture size and rotation of the video track
+            let asset = AVURLAsset(url: file)
+            if let t = try? await asset.loadTracks(withMediaType: .video).first,
+               let (size, tr) = try? await t.load(.naturalSize, .preferredTransform) {
+                dlog("photos: file video \(Int(size.width))x\(Int(size.height)) transform a=\(tr.a) b=\(tr.b) c=\(tr.c) d=\(tr.d)")
+            }
+        }
+        var placeholder: String?
         PHPhotoLibrary.shared().performChanges({
-            _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: file)
+            placeholder = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: file)?.placeholderForCreatedAsset?.localIdentifier
         }) { ok, err in
+            if ok, let pid = placeholder, let a = PHAsset.fetchAssets(withLocalIdentifiers: [pid], options: nil).firstObject {
+                dlog("photos: asset \(a.pixelWidth)x\(a.pixelHeight) \(Int(a.duration))s (\(a.pixelWidth > a.pixelHeight ? "landscape" : "portrait"))")
+            }
             DispatchQueue.main.async {
                 if temp { try? FileManager.default.removeItem(at: file) }
                 self.photoBusy = nil

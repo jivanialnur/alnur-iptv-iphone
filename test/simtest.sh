@@ -89,6 +89,10 @@ xcrun simctl io "$UDID" screenshot "$OUT/16c_dl_running.png" >/dev/null 2>&1; st
 # save the (MKV) download to Photos: VLC re-packs it into MP4 first
 xcrun simctl privacy "$UDID" grant photos-add $BID 2>/dev/null || true
 run 16d_photos 45 -uitest_tab library -uitest_photos YES -uitest_download movie:5000; stop
+# download running, app goes to the home screen: must keep its full speed (keep-awake), not the slow iOS service
+run 16e_dl_bg 4 -uitest_tab library -uitest_dl_fresh YES -uitest_download movie:5001
+mark "home screen dl"; xcrun simctl launch "$UDID" com.apple.Preferences >/dev/null; sleep 12
+mark "back to app dl"; xcrun simctl launch "$UDID" $BID >/dev/null; sleep 4; stop
 run 09_library 8 -uitest_tab library; stop
 run 10_settings 6 -uitest_tab settings; stop
 run 17_users 25 -uitest_tab settings -uitest_add_user "Bhai|http://iptv-mock.test:8899|bhai|demo"
@@ -130,6 +134,11 @@ grep -q "test: still" $OUT/app.log && S=$(grep -o 'test: still [0-9]*' $OUT/app.
 grep -q "download done movie:5001 bytes=8221381" $OUT/app.log && echo "PASS  Download after resume complete (8221381 bytes, file intact)" || echo "FAIL  Download after resume ($(grep -o 'download done movie:5001.*\|download error movie:5001.*\|download short.*' $OUT/app.log | head -2))"
 grep -q "download progress movie:5001 .* MB/s" $OUT/app.log && echo "PASS  Download speed shown ($(grep -o 'download progress movie:5001.*' $OUT/app.log | tail -1))" || echo "FAIL  Download speed"
 grep -q "photos saved=true" $OUT/app.log && echo "PASS  Save to Photos (MKV re-packed to MP4: $(grep -o 'remux finished.*' $OUT/app.log | head -1))" || echo "FAIL  Save to Photos ($(grep -o 'photos.*\|remux.*' $OUT/app.log | head -4 | tr '\n' ' '))"
+grep -q "photos: asset .*(landscape)" $OUT/app.log && echo "PASS  video in Photos is landscape ($(grep -o 'photos: file video.*' $OUT/app.log | head -1); $(grep -o 'photos: asset.*' $OUT/app.log | head -1))" || echo "FAIL  Photos orientation ($(grep -o 'photos: .*' $OUT/app.log | tail -3 | tr '\n' ' '))"
+sed -n "/home screen dl/,/back to app dl/p" $OUT/app.log > /tmp/bgdl.txt
+grep -q "keep-awake on" $OUT/app.log && grep -q "download done movie:5001" /tmp/bgdl.txt && ! grep -q "(background)" /tmp/bgdl.txt && echo "PASS  download keeps full speed with the app in the background ($(grep -o 'download progress movie:5001.*' /tmp/bgdl.txt | tail -1))" || echo "FAIL  background download ($(grep -o 'keep-awake.*\|download .*movie:5001.*' $OUT/app.log | tail -4 | tr '\n' ' '))"
+grep -q "keep-awake off" $OUT/app.log && echo "PASS  keep-awake switches off when the download is done" || echo "FAIL  keep-awake not switched off"
+F=$(sed -n "/=== 08b_fill/,/=== /p" $OUT/app.log | grep -o "aspect Fill view=.*" | tr '\n' ' ')
 sed -n "/=== 18_m3u:/,/=== 18b/p" $OUT/app.log > /tmp/m3.txt
 grep -q "m3u playlist: 3 channels, 1 movies" /tmp/m3.txt && grep -q 'cats=\["M3U News", "M3U Sports"\]' /tmp/m3.txt && echo "PASS  M3U link login: 3 channels in 2 groups + 1 movie" || echo "FAIL  M3U login ($(grep -o 'm3u.*\|add m3u.*' /tmp/m3.txt | head -3 | tr '\n' ' '))"
 grep -q "PLAYING 1 " /tmp/m3.txt && echo "PASS  M3U channel plays (direct playlist link)" || echo "FAIL  M3U channel did not play ($(grep -o 'error.*\|FAIL.*' /tmp/m3.txt | head -2 | tr '\n' ' '))"
@@ -146,8 +155,7 @@ grep -q "rate 2.0" /tmp/tp.txt && grep -q "rate 1.0" /tmp/tp.txt && echo "PASS  
 B=$(grep -o "buffer 5000: time [0-9]*s, loaded to [0-9]*s (ahead [0-9]*s)" $OUT/app.log | tail -1)
 echo "$B" | awk '{ split($4,t,"s"); split($7,l,"s"); exit !(l[1] > t[1] + 2) }' && echo "PASS  movie grey buffer bar ahead of play ($B)" || echo "FAIL  buffer bar ($B)"
 sed -n "/=== 08_movie_seek/,/=== 08b/p" $OUT/app.log | grep -A3 "test: seek to" | grep -q "buffer base after seek" && echo "PASS  grey buffer restarts from the new point after a seek ($(sed -n '/=== 08_movie_seek/,/=== 08b/p' $OUT/app.log | grep -o 'buffer base after seek.*' | tail -1))" || echo "FAIL  buffer after seek ($(sed -n '/=== 08_movie_seek/,/=== 08b/p' $OUT/app.log | grep -o 'buffer.*' | tail -3 | tr '\n' ' '))"
-F=$(sed -n "/=== 08b_fill/,/=== /p" $OUT/app.log | grep -o "aspect Fill view=.*" | tr '\n' ' ')
-echo "$F" | grep -q "zoom=[1-9]" && [ $(echo "$F" | grep -o "aspect Fill" | wc -l) -ge 2 ] && echo "PASS  Fill zooms the picture and is redone after rotating ($F)" || echo "FAIL  Fill ($F)"
+echo "$F" | grep -q "fill layers=AVSampleBufferDisplayLayer\|fill layers= zoom=[1-9]" && echo "PASS  Fill: video layer set to fill the screen ($F)" || echo "FAIL  Fill ($F)"
 grep -q "users now: \[\"demo\", \"Bhai\"\] current=Bhai" $OUT/app.log && grep -q "after switch: current=demo" $OUT/app.log && echo "PASS  second user added, switch back works" || echo "FAIL  users ($(grep -o 'users now.*\|after switch.*' $OUT/app.log | tr '\n' ' '))"
 sed -n "/=== 07x_sound_set/,/=== 07y/p" $OUT/app.log > /tmp/s1.txt; sed -n "/=== 07y_sound_kept/,/=== 07z/p" $OUT/app.log > /tmp/s2.txt
 grep -q 'sound: boost 180% = +8.5 dB (player pre-amp now 8.5 dB)' /tmp/s1.txt && grep -q "PLAYING 1000" /tmp/s1.txt && echo "PASS  sound boost 180%: +8.5 dB set in VLC (read back from the player), channel plays" || echo "FAIL  sound filters ($(grep -o 'sound:.*' /tmp/s1.txt | head -1))"

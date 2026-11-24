@@ -49,6 +49,7 @@ struct VLCVideoView: UIViewRepresentable {
         let v = PiPVideoView()
         v.backgroundColor = .black
         v.pipMediaController = pc
+        pc.videoView = v
         v.onPiPReady = { [weak pc] c in DispatchQueue.main.async { pc?.pipReady(c) } }
         pc.player.drawable = v
         return v

@@ -86,6 +86,7 @@ struct MainTabs: View {
                 await app.ensure(t.0)
                 if let it = app.lists[t.0]?.items.first(where: { $0.sid == t.1 }) {
                     let dl = Downloads.shared
+                    if UserDefaults.standard.bool(forKey: "uitest_dl_fresh"), let e = dl.entry(for: it) { dlog("test: delete old download"); dl.cancel(e) }
                     if dl.localURL(for: it) != nil {
                         if UserDefaults.standard.bool(forKey: "uitest_photos"), let e = dl.entry(for: it) {
                             dlog("test: save to photos")
