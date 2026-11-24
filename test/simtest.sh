@@ -38,7 +38,11 @@ if [ "${MODE:-full}" = glass ]; then
   run g4_movie 60 -uitest_play movie:5000 -uitest_keep_controls YES; stop
   sleep 1; cp "$LOG" $OUT/app.log; echo "glass screenshots done"; exit 0
 fi
-run 01_live 25 -uitest_reset YES -uitest_login "$LOGIN"; stop
+# first launch on a fresh simulator can take very long: wait until the app has logged in (max 3 min)
+echo "=== 01_live: -uitest_reset YES -uitest_login $LOGIN"; mark "01_live: first launch"
+xcrun simctl launch "$UDID" $BID -uitest_reset YES -uitest_login "$LOGIN" >/dev/null
+for i in $(seq 1 90); do grep -q "list live:" "$LOG" 2>/dev/null && break; sleep 2; done
+sleep 3; xcrun simctl io "$UDID" screenshot "$OUT/01_live.png" >/dev/null 2>&1; stop
 run 01b_search 10 -uitest_search Gujarati; stop
 run 02_movies 10 -uitest_tab movie; stop
 run 03_series_detail 10 -uitest_tab series -uitest_open series:700; stop
