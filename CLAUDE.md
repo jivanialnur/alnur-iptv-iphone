@@ -97,7 +97,9 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   VLC 4 scaleFactor/crop are ignored by that output – 1.6.0 Fill did nothing on his phone). Background downloads:
   `KeepAwake` (silent looping AVAudioPlayer, .mixWithOthers) keeps the app alive so the fast foreground download continues;
   off when no download runs / app returns; if another app interrupts the sound → hand over to background session.
-  Photos: remuxed file is 640x360 identity transform (landscape) → "Photos doesn't rotate" = his portrait lock. iOS 18 simtest needs a long first launch on fresh runner images
+  Photos: remuxed file is 640x360 identity transform (landscape) → "Photos doesn't rotate" = his portrait lock.
+  · 1.6.2: 1.6.1 crashed right after "Save to Photos" on his iPhone – PHAsset.fetchAssets (read access, no
+  NSPhotoLibraryUsageDescription → iOS kills the app; the simulator did not). Never read/fetch from Photos, add-only. iOS 18 simtest needs a long first launch on fresh runner images
   (now waits for "list live:"). Next: his iPhone feedback (PiP, sound, downloads), then merge vlc4 → main.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.

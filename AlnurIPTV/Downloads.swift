@@ -545,13 +545,11 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
                 dlog("photos: file video \(Int(size.width))x\(Int(size.height)) transform a=\(tr.a) b=\(tr.b) c=\(tr.c) d=\(tr.d)")
             }
         }
-        var placeholder: String?
+        // NOTE: only "add" access – never read / fetch from the library (1.6.1 did: iOS killed the app,
+        // reading Photos needs another permission the app does not ask for)
         PHPhotoLibrary.shared().performChanges({
-            placeholder = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: file)?.placeholderForCreatedAsset?.localIdentifier
+            _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: file)
         }) { ok, err in
-            if ok, let pid = placeholder, let a = PHAsset.fetchAssets(withLocalIdentifiers: [pid], options: nil).firstObject {
-                dlog("photos: asset \(a.pixelWidth)x\(a.pixelHeight) \(Int(a.duration))s (\(a.pixelWidth > a.pixelHeight ? "landscape" : "portrait"))")
-            }
             DispatchQueue.main.async {
                 if temp { try? FileManager.default.removeItem(at: file) }
                 self.photoBusy = nil
