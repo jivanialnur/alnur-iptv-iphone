@@ -92,7 +92,12 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   from bytes on the phone, no ETag needed); app to background → rest via background session (Range), back → normal
   again; MB/s; "Save to Photos" (mp4 direct, else VLC sout `#std{access=file,mux=mp4}` remux, then PHPhotoLibrary addOnly).
   Mock: movie 5001 is throttled ≈1 MB/s (pause test), `/playlist.m3u` + `/get.php`. Hooks: `-uitest_dl_pause`,
-  `-uitest_photos`, `-uitest_aspect fill`, `-uitest_add_m3u "Name|link"`. iOS 18 simtest needs a long first launch on fresh runner images
+  `-uitest_photos`, `-uitest_aspect fill`, `-uitest_add_m3u "Name|link"`.
+  · 1.6.1: Fill/Fit = `videoGravity` on VLC's AVSampleBufferDisplayLayer (PiPVideoView.applyFill, re-applied every tick;
+  VLC 4 scaleFactor/crop are ignored by that output – 1.6.0 Fill did nothing on his phone). Background downloads:
+  `KeepAwake` (silent looping AVAudioPlayer, .mixWithOthers) keeps the app alive so the fast foreground download continues;
+  off when no download runs / app returns; if another app interrupts the sound → hand over to background session.
+  Photos: remuxed file is 640x360 identity transform (landscape) → "Photos doesn't rotate" = his portrait lock. iOS 18 simtest needs a long first launch on fresh runner images
   (now waits for "list live:"). Next: his iPhone feedback (PiP, sound, downloads), then merge vlc4 → main.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.

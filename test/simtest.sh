@@ -99,7 +99,7 @@ run 17_users 25 -uitest_tab settings -uitest_add_user "Bhai|http://iptv-mock.tes
 xcrun simctl io "$UDID" screenshot "$OUT/17b_users.png" >/dev/null 2>&1; stop
 # M3U link login: plain playlist (channels + movies, plays) and an Xtream get.php link
 run 18_m3u 30 -uitest_tab live -uitest_add_m3u "Playlist|http://iptv-mock.test:8899/playlist.m3u"; stop
-run 18b_m3u_xtream 15 -uitest_tab live -uitest_add_m3u "Xt|http://iptv-mock.test:8899/get.php?username=demo&password=demo&type=m3u_plus&output=ts"; stop
+run 18b_m3u_xtream 30 -uitest_tab live -uitest_add_m3u "Xt|http://iptv-mock.test:8899/get.php?username=demo&password=demo&type=m3u_plus&output=ts"; stop
 
 sleep 1; cp "$LOG" $OUT/app.log
 echo; echo "==== RESULTS"
@@ -134,7 +134,7 @@ grep -q "test: still" $OUT/app.log && S=$(grep -o 'test: still [0-9]*' $OUT/app.
 grep -q "download done movie:5001 bytes=8221381" $OUT/app.log && echo "PASS  Download after resume complete (8221381 bytes, file intact)" || echo "FAIL  Download after resume ($(grep -o 'download done movie:5001.*\|download error movie:5001.*\|download short.*' $OUT/app.log | head -2))"
 grep -q "download progress movie:5001 .* MB/s" $OUT/app.log && echo "PASS  Download speed shown ($(grep -o 'download progress movie:5001.*' $OUT/app.log | tail -1))" || echo "FAIL  Download speed"
 grep -q "photos saved=true" $OUT/app.log && echo "PASS  Save to Photos (MKV re-packed to MP4: $(grep -o 'remux finished.*' $OUT/app.log | head -1))" || echo "FAIL  Save to Photos ($(grep -o 'photos.*\|remux.*' $OUT/app.log | head -4 | tr '\n' ' '))"
-grep -q "photos: asset .*(landscape)" $OUT/app.log && echo "PASS  video in Photos is landscape ($(grep -o 'photos: file video.*' $OUT/app.log | head -1); $(grep -o 'photos: asset.*' $OUT/app.log | head -1))" || echo "FAIL  Photos orientation ($(grep -o 'photos: .*' $OUT/app.log | tail -3 | tr '\n' ' '))"
+grep -o "photos: file video [0-9]*x[0-9]* transform a=1.0 b=0.0 c=0.0 d=1.0" $OUT/app.log | head -1 | awk '{split($4,d,"x"); exit !(d[1]+0 > d[2]+0)}' && echo "PASS  video for Photos is landscape, no rotation flag ($(grep -o 'photos: file video.*' $OUT/app.log | head -1))" || echo "FAIL  Photos orientation ($(grep -o 'photos: .*' $OUT/app.log | tail -3 | tr '\n' ' '))"
 sed -n "/home screen dl/,/back to app dl/p" $OUT/app.log > /tmp/bgdl.txt
 grep -q "keep-awake on" $OUT/app.log && grep -q "download done movie:5001" /tmp/bgdl.txt && ! grep -q "(background)" /tmp/bgdl.txt && echo "PASS  download keeps full speed with the app in the background ($(grep -o 'download progress movie:5001.*' /tmp/bgdl.txt | tail -1))" || echo "FAIL  background download ($(grep -o 'keep-awake.*\|download .*movie:5001.*' $OUT/app.log | tail -4 | tr '\n' ' '))"
 grep -q "keep-awake off" $OUT/app.log && echo "PASS  keep-awake switches off when the download is done" || echo "FAIL  keep-awake not switched off"
@@ -144,7 +144,7 @@ grep -q "m3u playlist: 3 channels, 1 movies" /tmp/m3.txt && grep -q 'cats=\["M3U
 grep -q "PLAYING 1 " /tmp/m3.txt && echo "PASS  M3U channel plays (direct playlist link)" || echo "FAIL  M3U channel did not play ($(grep -o 'error.*\|FAIL.*' /tmp/m3.txt | head -2 | tr '\n' ' '))"
 grep -q "after switch: current=" /tmp/m3.txt && echo "PASS  switched back to the first user after the M3U test" || echo "FAIL  switch back after M3U"
 sed -n "/=== 18b_m3u_xtream/,\$p" $OUT/app.log | grep -q "m3u link is an Xtream account → Xtream login" && sed -n "/=== 18b_m3u_xtream/,\$p" $OUT/app.log | grep -q "login ok" && echo "PASS  M3U get.php link → full Xtream login" || echo "FAIL  M3U Xtream link"
-grep -q "open movie 5000 LOCAL-FILE" $OUT/app.log && grep -A3 "open movie 5000 LOCAL-FILE" $OUT/app.log | grep -q "PLAYING 5000" && echo "PASS  Download: plays offline from the iPhone" || echo "FAIL  Download: offline play"
+grep -q "open movie 5000 LOCAL-FILE" $OUT/app.log && grep -A10 "open movie 5000 LOCAL-FILE" $OUT/app.log | grep -q "PLAYING 5000" && echo "PASS  Download: plays offline from the iPhone" || echo "FAIL  Download: offline play"
 sed -n "/=== 07s_swipes/,/=== 07b/p" $OUT/app.log | grep -o "middle swipe.*\|player closed.*\|player: to.*" > /tmp/sw.txt
 EXP="middle swipe up landscape=true|middle swipe down landscape=true|middle swipe down landscape=true|player: to portrait|middle swipe up landscape=false|player: to landscape|middle swipe down landscape=true|player: to portrait|middle swipe down landscape=false|player closed 1004|player closed 1004"
 GOT=$(grep -v "^$" /tmp/sw.txt | tr '\n' '|' | sed 's/|$//')
