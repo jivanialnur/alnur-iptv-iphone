@@ -47,7 +47,8 @@ final class PlayerController: NSObject, ObservableObject {
     enum AspectMode: Int, CaseIterable { case fit, fill, wide, classic
         var title: String { ["Fit", "Fill", "16:9", "4:3"][rawValue] }
     }
-    @Published var aspect: AspectMode = .fit
+    @Published var aspect: AspectMode = .fit { didSet { fillApplied = false } }
+    private var fillApplied = false
     @Published var muted = false
     @Published var rate: Float = 1
     @Published var recording = false
@@ -65,6 +66,10 @@ final class PlayerController: NSObject, ObservableObject {
     private var lastTimeForRate = 0
     private var bytesPerMs: Double = 0
     private var lastBufferLog = Date.distantPast
+    /// after a seek VLC throws away what it had read ahead, but its "read" counter keeps it:
+    /// remember that difference and leave it out (otherwise the grey bar jumps far ahead)
+    private var bufferBase: Int64?
+    private var needBufferBase = true
     private var pendingStart: Double?      // resume point, applied once the video runs
     private var eventLengthMs = 0           // length reported by VLC (more reliable than media.length)
 
@@ -118,7 +123,13 @@ final class PlayerController: NSObject, ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
                 guard let self else { return }
                 dlog("test: seek to \(UITest.seekTo) (len \(self.lengthMs))")
-                self.vlc { $0.time = VLCTime(int: Int32(UITest.seekTo * 1000)) }
+                if self.lengthMs > 0 { self.seek(fraction: UITest.seekTo * 1000 / Double(self.lengthMs)) }
+                else { self.vlc { $0.time = VLCTime(int: Int32(UITest.seekTo * 1000)) } }
+            }
+        }
+        if let a = UserDefaults.standard.string(forKey: "uitest_aspect"), let m = AspectMode.allCases.first(where: { $0.title.lowercased() == a }) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+                dlog("test: screen \(m.title)"); self?.aspect = m; self?.applyAspect()
             }
         }
     }
@@ -251,7 +262,7 @@ final class PlayerController: NSObject, ObservableObject {
         media.addOption(":live-caching=\(app.settings.caching)")
         media.addOption(":http-reconnect")
         pendingStart = (startAt ?? 0) > 5 ? startAt : nil
-        lastDemux = 0; lastTimeForRate = 0; bytesPerMs = 0; bufferedMs = 0
+        lastDemux = 0; lastTimeForRate = 0; bytesPerMs = 0; bufferedMs = 0; needBufferBase = true
         eventLengthMs = 0
         dlog("open \(current.kind.rawValue) \(current.sid)\(url.isFileURL ? " LOCAL-FILE" : "") ua=\(ua) try=\(attempt) start=\(startAt ?? 0)")
         gotVideo = false
@@ -261,6 +272,8 @@ final class PlayerController: NSObject, ObservableObject {
 
     private func tick() {
         if suspended { return }
+        // Fill needs the picture size, which VLC only knows a moment after the start
+        if aspect == .fill, !fillApplied, player.videoSize.width > 0 { fillApplied = true; applyAspect() }
         if let s = sleepAt, Date() >= s { dlog("sleep timer: close"); sleepAt = nil; stop(); app.closePlayer(); return }
         if isLive, let st = playStart {
             if player.state == .paused, pausedSince == nil { pausedSince = Date() }
@@ -286,8 +299,10 @@ final class PlayerController: NSObject, ObservableObject {
                 dlog("resume seek to \(Int(s))")
                 vlc { $0.time = VLCTime(int: Int32(s * 1000)) }
                 timeMs = Int(s * 1000)
+                afterSeek()
             }
             dlog("PLAYING \(current.sid) video=\(player.hasVideoOut) size=\(Int(player.videoSize.width))x\(Int(player.videoSize.height)) audio=\(audioTracks.map { $0.name }) subs=\(subtitleTracks.map { $0.name })")
+            applyBoost()
             let uas = uaList
             app.setStreamUA(uas[min(uaIdx, uas.count - 1)])
         }
@@ -390,6 +405,7 @@ final class PlayerController: NSObject, ObservableObject {
         let t = max(0, timeMs + secs * 1000)
         vlc { $0.time = VLCTime(int: Int32(t)) }
         timeMs = t
+        afterSeek()
     }
 
     func seek(fraction f: Double) {
@@ -397,6 +413,13 @@ final class PlayerController: NSObject, ObservableObject {
         let t = Int(Double(lengthMs) * min(max(f, 0), 1))
         vlc { $0.time = VLCTime(int: Int32(t)) }
         timeMs = t
+        afterSeek()
+    }
+
+    private func afterSeek() {
+        needBufferBase = true
+        bufferedMs = timeMs
+        lastTimeForRate = 0
     }
 
     var audioTracks: [Track] { player.audioTracks.map { Track(id: $0.trackId, name: $0.trackName) } }
@@ -429,9 +452,17 @@ final class PlayerController: NSObject, ObservableObject {
             let r = Double(db) / Double(dt)
             bytesPerMs = bytesPerMs == 0 ? r : bytesPerMs * 0.8 + r * 0.2
         }
-        if dt > 400 || dt < 0 { lastTimeForRate = timeMs; lastDemux = demux }
-        guard bytesPerMs > 0 else { bufferedMs = timeMs; return }
-        let aheadBytes = Double(max(read - demux, 0))
+        if !needBufferBase && (dt > 400 || dt < 0) { lastTimeForRate = timeMs; lastDemux = demux }
+        guard bytesPerMs > 0, !needBufferBase else { bufferedMs = timeMs; return }
+        if needBufferBase {
+            // wait ~1 s after the seek so VLC has dropped its old read-ahead, then take the new zero point
+            if lastTimeForRate == 0 { lastTimeForRate = -1; return }
+            bufferBase = read - demux
+            needBufferBase = false
+            dlog("buffer base after seek/start: \(read - demux) bytes left out, at \(timeMs / 1000)s")
+            lastTimeForRate = timeMs; lastDemux = demux
+        }
+        let aheadBytes = Double(max(read - demux - (bufferBase ?? 0), 0))
         let aheadMs = Int(aheadBytes / bytesPerMs) + app.settings.caching
         bufferedMs = min(lengthMs, timeMs + aheadMs)
         if Date().timeIntervalSince(lastBufferLog) > 5 {
@@ -440,40 +471,37 @@ final class PlayerController: NSObject, ObservableObject {
         }
     }
 
-    /// Sound options as VLC audio filters (both are built into VLCKit):
-    /// - boost: compressor used as a limiter – peaks are held below the threshold, then the make-up gain
-    ///   raises everything by the boost; so 200 % is louder but does not clip.
-    /// - auto-level: normvol – measures loudness continuously and evens it out slowly (no jumps), so channels
-    ///   and adverts end up at about the same level. The iPhone volume buttons keep working as before.
+    /// Volume boost:
+    /// - the gain is VLC's equalizer pre-amp (flat, all bands 0) – it works at once, no reopening;
+    ///   200 % = +10 dB, which sounds about twice as loud
+    /// - a limiter (VLC compressor with a high ratio just below full scale) stops the boosted peaks from clipping;
+    ///   it is always on and does nothing to normal sound
     private func addSoundFilters(_ media: VLCMedia) {
-        let boost = min(max(app.settings.soundBoost, 100), 200)
-        let auto = app.settings.autoLevel
-        var filters: [String] = []
-        if auto {
-            filters.append("normvol")
-            media.addOption(":norm-buff-size=40")
-            media.addOption(":norm-max-level=1.6")
-        }
-        if boost > 100 || auto {
-            let gain = 20 * log10(Double(boost) / 100)          // dB, 0 … 6
-            filters.append("compressor")
-            media.addOption(":compressor-rms-peak=1.0")            // react to peaks
-            media.addOption(":compressor-attack=1.5")
-            media.addOption(":compressor-release=150")
-            media.addOption(":compressor-threshold=" + String(format: "%.1f", -(gain + 1.5)))
-            media.addOption(":compressor-ratio=20")
-            media.addOption(":compressor-knee=2")
-            media.addOption(":compressor-makeup-gain=" + String(format: "%.1f", gain))
-        }
-        if !filters.isEmpty { media.addOption(":audio-filter=" + filters.joined(separator: ":")) }
-        dlog("sound: boost \(boost)% autoLevel=\(auto) filters=\(filters)")
+        media.addOption(":audio-filter=compressor")
+        media.addOption(":compressor-rms-peak=1.0")
+        media.addOption(":compressor-attack=1.5")
+        media.addOption(":compressor-release=120")
+        media.addOption(":compressor-threshold=-2.0")
+        media.addOption(":compressor-ratio=20")
+        media.addOption(":compressor-knee=1.5")
+        media.addOption(":compressor-makeup-gain=0")
     }
 
-    /// New sound settings: reopen the stream at the same point so VLC uses them.
+    func applyBoost(log: Bool = true) {
+        let boost = min(max(app.settings.soundBoost, 100), 200)
+        let db = Float(10 * log2(Double(boost) / 100))
+        vlc { p in
+            if boost <= 100 { p.equalizer = nil }
+            else { let eq = VLCAudioEqualizer(); eq.preAmplification = db; p.equalizer = eq }
+            let now = p.equalizer?.preAmplification ?? 0
+            if log { DispatchQueue.main.async { dlog(String(format: "sound: boost %d%% = +%.1f dB (player pre-amp now %.1f dB)", boost, db, now)) } }
+        }
+    }
+
+    /// New boost from the slider: applied straight away (no reopening).
     func applySound() {
-        guard gotVideo || error != nil else { return }
-        dlog("apply sound")
-        retry()
+        applyBoost()
+        say("Volume boost \(app.settings.soundBoost)%")
     }
 
     // MARK: extra features
@@ -510,13 +538,19 @@ final class PlayerController: NSObject, ObservableObject {
 
     func applyAspect() {
         let mode = aspect
-        let w = UInt32(max(viewSize.width, 1)), h = UInt32(max(viewSize.height, 1))
+        // screen size in pixels and the picture size → zoom that covers the whole screen (edges cut off)
+        let scale = UIScreen.main.scale
+        let vw = Double(viewSize.width * scale), vh = Double(viewSize.height * scale)
+        let pic = player.videoSize
+        let fill: Float = pic.width > 0 && pic.height > 0 && vw > 0 ? Float(max(vw / Double(pic.width), vh / Double(pic.height))) : 0
+        dlog("aspect \(mode.title) view=\(Int(vw))x\(Int(vh)) video=\(Int(pic.width))x\(Int(pic.height)) zoom=\(fill)")
         vlc { p in
+            p.setCropRatioWithNumerator(0, denominator: 0)
             switch mode {
-            case .fit: p.videoAspectRatio = nil; p.setCropRatioWithNumerator(0, denominator: 0)
-            case .fill: p.videoAspectRatio = nil; p.setCropRatioWithNumerator(w, denominator: h)
-            case .wide: p.setCropRatioWithNumerator(0, denominator: 0); p.videoAspectRatio = "16:9"
-            case .classic: p.setCropRatioWithNumerator(0, denominator: 0); p.videoAspectRatio = "4:3"
+            case .fit: p.videoAspectRatio = nil; p.scaleFactor = 0
+            case .fill: p.videoAspectRatio = nil; p.scaleFactor = fill
+            case .wide: p.scaleFactor = 0; p.videoAspectRatio = "16:9"
+            case .classic: p.scaleFactor = 0; p.videoAspectRatio = "4:3"
             }
         }
     }

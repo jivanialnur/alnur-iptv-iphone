@@ -28,6 +28,8 @@ struct Item: Codable, Identifiable, Hashable {
     var seriesName: String?
     var season: String?
     var duration: Int?
+    /// direct stream link (M3U playlists); Xtream items build their link from the account
+    var url: String?
 
     var id: String { "\(kind.rawValue):\(sid)" }
 
@@ -55,6 +57,8 @@ struct Account: Codable, Equatable {
     var apiUA: String?
     var streamUA: String?
     var name: String?
+    /// set when this user is a plain M3U playlist (no Xtream API)
+    var m3u: String?
 
     /// one user = one username on one server
     var key: String { "\(username)@\(URL(string: url)?.host ?? url)" }

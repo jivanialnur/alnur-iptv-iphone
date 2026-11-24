@@ -70,6 +70,7 @@ struct PlayerScreen: View {
     @State private var showGuide = false
     @State private var isLandscape = true
     @State private var showSound = false
+    @State private var showTotal = UserDefaults.standard.bool(forKey: "showTotalTime")
 
     init(app: AppState, request: PlayRequest) {
         _pc = StateObject(wrappedValue: PlayerController(app: app, queue: request.queue, index: request.index))
@@ -338,8 +339,18 @@ struct PlayerScreen: View {
                     scrub = v
                     if done { pc.seek(fraction: v); scrubbing = false; scheduleHide() }
                 }
-                Text("−" + fmtTime(Double(max(pc.lengthMs - pc.timeMs, 0)) / 1000))
-                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                // tap: total length ⇄ time left (like YouTube), remembered
+                Button {
+                    showTotal.toggle()
+                    UserDefaults.standard.set(showTotal, forKey: "showTotalTime")
+                } label: {
+                    Text(showTotal ? fmtTime(Double(pc.lengthMs) / 1000)
+                                   : "−" + fmtTime(Double(max(pc.lengthMs - pc.timeMs, 0)) / 1000))
+                        .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                        .frame(minWidth: 56, minHeight: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 14).frame(height: 40)
             .glass(Capsule(), interactive: false)
@@ -727,11 +738,16 @@ struct SoundPanel: View {
     }
 }
 
-/// The two sound options – used in the player panel and in Settings.
+/// Volume boost – used in the player panel and in Settings.
 struct SoundControls: View {
     @ObservedObject var app: AppState
     var onApply: () -> Void = {}
-    @State private var boost: Double = 100
+    @State private var editing = false
+
+    private var boost: Binding<Double> {
+        Binding(get: { Double(app.settings.soundBoost) },
+                set: { app.settings.soundBoost = Int(($0 / 5).rounded() * 5) })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -739,40 +755,22 @@ struct SoundControls: View {
                 HStack {
                     Text("Volume boost")
                     Spacer()
-                    Text("\(Int(boost))%").font(.body.monospacedDigit().weight(.semibold))
+                    Text("\(app.settings.soundBoost)%").font(.body.monospacedDigit().weight(.semibold))
                 }
-                Slider(value: $boost, in: 100...200, step: 5) { editing in
-                    if !editing { commitBoost() }
-                }
-                if boost > 150 {
+                Slider(value: boost, in: 100...200, onEditingChanged: { e in
+                    editing = e
+                    if !e { app.saveSettings(); dlog("boost set \(app.settings.soundBoost)%"); onApply() }
+                })
+                if app.settings.soundBoost > 150 {
                     Label("Above 150% the sound may distort", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption).foregroundStyle(.orange)
                 }
             }
-            Toggle(isOn: Binding(get: { app.settings.autoLevel }, set: { v in
-                app.settings.autoLevel = v; app.saveSettings(); onApply()
-            })) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Auto-level")
-                    Text("Same loudness on every channel, adverts not suddenly louder").font(.caption).foregroundStyle(.secondary)
-                }
-            }
             Button {
-                boost = 100
                 app.settings.soundBoost = 100
-                app.settings.autoLevel = false
                 app.saveSettings(); onApply()
             } label: { Label("Reset to default", systemImage: "arrow.counterclockwise") }
-            .disabled(app.settings.soundBoost == 100 && !app.settings.autoLevel)
+            .disabled(app.settings.soundBoost == 100)
         }
-        .onAppear { boost = Double(app.settings.soundBoost) }
-    }
-
-    private func commitBoost() {
-        let v = Int(boost)
-        guard v != app.settings.soundBoost else { return }
-        app.settings.soundBoost = v
-        app.saveSettings()
-        onApply()
     }
 }

@@ -120,7 +120,7 @@ struct SettingsView: View {
                 Section {
                     SoundControls(app: app)
                 } header: { Text("Sound") } footer: {
-                    Text("Boost uses a limiter so the sound does not clip. Auto-level evens out loudness slowly between channels and adverts. Your iPhone volume buttons keep working.")
+                    Text("Boost makes quiet sound louder (up to 200 %); a limiter keeps loud parts from clipping. Your iPhone volume buttons keep working.")
                 }
 
                 Section("Lists") {

@@ -64,6 +64,7 @@ enum Xtream {
     }
 
     static func streamURL(_ it: Item, acc: Account, format: String) -> URL? {
+        if let u = it.url { return URL(string: u) }
         let cred = "\(enc(acc.username))/\(enc(acc.password))"
         switch it.kind {
         case .live: return URL(string: "\(acc.url)/live/\(cred)/\(it.sid).\(format)")

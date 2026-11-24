@@ -126,6 +126,45 @@ final class AppState: ObservableObject {
     }
 
     // MARK: login
+    /// Login with an M3U link: Xtream get.php links become a normal Xtream login, others are read as a playlist.
+    func loginM3U(_ link: String, name: String? = nil) async throws {
+        let link = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let x = M3U.xtreamParts(link) {
+            do {
+                dlog("m3u link is an Xtream account → Xtream login")
+                try await login(url: x.base, user: x.user, pass: x.pass, name: name)
+                return
+            } catch XtreamError.auth { throw XtreamError.auth }
+            catch { dlog("Xtream login from M3U link failed (\(error.localizedDescription)) – reading it as a playlist") }
+        }
+        let text = try await M3U.download(link)
+        let lists = await Task.detached(priority: .userInitiated) { M3U.parse(text) }.value
+        let nLive = lists[.live]?.items.count ?? 0, nMovie = lists[.movie]?.items.count ?? 0
+        guard nLive + nMovie > 0 else { throw XtreamError.bad("The playlist has no channels") }
+        dlog("m3u playlist: \(nLive) channels, \(nMovie) movies")
+        let host = URL(string: link)?.host ?? "playlist"
+        var acc = Account(url: link, username: "m3u-" + M3U.stableHash(link), password: "")
+        acc.m3u = link
+        acc.name = (name?.trimmingCharacters(in: .whitespaces)).flatMap { $0.isEmpty ? nil : $0 } ?? host
+        let changed = account?.key != acc.key
+        if changed { if player != nil { closePlayer() }; clearLists() }
+        account = acc
+        rememberAccount(acc)
+        if changed { accountChecked = true; loadProfile() }
+        storeM3U(lists)
+        info = AccountInfo(status: "M3U playlist")
+        offline = false
+        save("account", acc); save("info", info)
+    }
+
+    private func storeM3U(_ l: [Kind: ListData]) {
+        for (k, d) in l {
+            lists[k] = d
+            let file = listFile(k)
+            Task.detached(priority: .background) { if let data = try? JSONEncoder().encode(d) { try? data.write(to: file, options: .atomic) } }
+        }
+    }
+
     func login(url: String, user: String, pass: String, name: String? = nil) async throws {
         var acc = Account(url: Xtream.normBase(url), username: user.trimmingCharacters(in: .whitespaces), password: pass)
         acc.name = name?.trimmingCharacters(in: .whitespaces)
@@ -150,6 +189,7 @@ final class AppState: ObservableObject {
     func refreshAccount() async {
         guard !accountChecked, var acc = account else { return }
         accountChecked = true
+        if acc.m3u != nil { offline = false; return }      // playlist: nothing to check
         do {
             let r = try await Xtream.login(acc)
             if acc.apiUA != r.ua { acc.apiUA = r.ua; account = acc; save("account", acc); rememberAccount(acc) }
@@ -214,6 +254,20 @@ final class AppState: ObservableObject {
         if loading.contains(kind) { return }
         loading.insert(kind); errors[kind] = nil
         defer { loading.remove(kind) }
+        if let link = acc.m3u {
+            // playlist: one download fills channels and movies
+            do {
+                let text = try await M3U.download(link)
+                let l = await Task.detached(priority: .userInitiated) { M3U.parse(text) }.value
+                guard account?.key == acc.key else { return }
+                storeM3U(l)
+                dlog("list \(kind.rawValue) (m3u): \(l[kind]?.items.count ?? 0) items")
+            } catch {
+                dlog("m3u reload failed: \(error.localizedDescription)")
+                if !quiet || lists[kind] == nil { errors[kind] = error.localizedDescription }
+            }
+            return
+        }
         do {
             let d = try await Xtream.fetchList(kind, acc: acc, ua: acc.apiUA ?? API_UAS[0])
             dlog("list \(kind.rawValue): \(d.items.count) items, \(d.cats.count) cats")

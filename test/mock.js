@@ -20,6 +20,17 @@ http.createServer((q, s) => {
   const ua = q.headers['user-agent'] || '';
   const u = new URL(q.url, 'http://x');
   if (u.pathname === '/logo.png') { s.writeHead(200, { 'Content-Type': 'image/png' }); return s.end(fs.readFileSync(path.join(__dirname, 'logo.png'))); }
+  if (u.pathname === '/playlist.m3u' || u.pathname === '/get.php') {
+    // M3U login: plain playlist (any user-agent) – the get.php form is also an Xtream account
+    log('m3u', u.pathname, ua.slice(0, 12));
+    const H = 'http://iptv-mock.test:8899';
+    const t = ['#EXTM3U',
+      '#EXTINF:-1 tvg-id="a" tvg-logo="' + H + '/logo.png" group-title="M3U News",M3U News One', H + '/live/demo/demo/1003.ts',
+      '#EXTINF:-1 tvg-logo="" group-title="M3U News",M3U News Two', H + '/live/demo/demo/1004.ts',
+      '#EXTINF:-1 group-title="M3U Sports",M3U Sports HD', H + '/live/demo/demo/1006.ts',
+      '#EXTINF:-1 group-title="M3U Movies",M3U Film 2024', H + '/movie/demo/demo/5003.mkv', ''].join('\n');
+    s.writeHead(200, { 'Content-Type': 'audio/x-mpegurl' }); return s.end(t);
+  }
   if (u.pathname.endsWith('player_api.php')) {
     if (!/MAG200|Dalvik/.test(ua)) { log('api 503 bad-UA', ua.slice(0, 20)); s.writeHead(503); return s.end('503'); }
     if (u.searchParams.get('password') !== 'demo') { s.setHeader('content-type', 'application/json'); return s.end(JSON.stringify({ user_info: { auth: 0 } })); }
@@ -41,6 +52,18 @@ http.createServer((q, s) => {
   if (kind !== 'live') {
     const range = q.headers.range;
     log('stream', sid, 'OK file', f, range || '');
+    if (sid === '5001') {
+      // slow movie (≈1 MB/s) for the download pause / resume test
+      const start = range ? +range.replace('bytes=', '').split('-')[0] : 0;
+      s.writeHead(range ? 206 : 200, Object.assign({ 'Content-Length': st.size - start, 'Accept-Ranges': 'bytes', 'Content-Type': 'video/x-matroska' }, range ? { 'Content-Range': `bytes ${start}-${st.size - 1}/${st.size}` } : {}));
+      const fd = fs.openSync(M(f), 'r'); let pos = start;
+      const tick = setInterval(() => {
+        if (s.destroyed || pos >= st.size) { clearInterval(tick); if (!s.destroyed) s.end(); return; }
+        const n = Math.min(100 * 1024, st.size - pos), b = Buffer.alloc(n); fs.readSync(fd, b, 0, n, pos); pos += n; s.write(b);
+      }, 100);
+      s.on('close', () => { clearInterval(tick); try { fs.closeSync(fd); } catch (e) {} });
+      return;
+    }
     if (range) { const [a, e] = range.replace('bytes=', '').split('-'); const start = +a, end = e ? +e : st.size - 1; s.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${st.size}`, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': 'video/x-matroska' }); return fs.createReadStream(M(f), { start, end }).pipe(s); }
     s.writeHead(200, { 'Content-Length': st.size, 'Accept-Ranges': 'bytes', 'Content-Type': 'video/x-matroska' }); return fs.createReadStream(M(f)).pipe(s);
   }
