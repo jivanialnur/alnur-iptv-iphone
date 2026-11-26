@@ -80,6 +80,9 @@ struct AppSettings: Codable, Equatable {
     /// sound: 100…200 % (boost with limiter) and auto-level (same loudness on every channel)
     var soundBoost: Int = 100
     var autoLevel: Bool = false
+    /// look: "auto" / "light" / "dark" and the accent colour id (see AppTheme)
+    var theme: String = "auto"
+    var accent: String = "blue"
 
     init() {}
     // older saved settings have no sound keys – read what is there, default the rest
@@ -90,6 +93,8 @@ struct AppSettings: Codable, Equatable {
         autoNext = try c.decodeIfPresent(Bool.self, forKey: .autoNext) ?? true
         soundBoost = try c.decodeIfPresent(Int.self, forKey: .soundBoost) ?? 100
         autoLevel = try c.decodeIfPresent(Bool.self, forKey: .autoLevel) ?? false
+        theme = try c.decodeIfPresent(String.self, forKey: .theme) ?? "auto"
+        accent = try c.decodeIfPresent(String.self, forKey: .accent) ?? "blue"
     }
 }
 

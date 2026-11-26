@@ -36,6 +36,11 @@ if [ "${MODE:-full}" = glass ]; then
   run g3_portrait 60 -uitest_play live:1004 -uitest_keep_controls YES -uitest_portrait_after 30 -uitest_sound_panel YES
   stop
   run g4_movie 60 -uitest_play movie:5000 -uitest_keep_controls YES; stop
+  # browsing screens: glass background, glass search, light / dark + accent colour
+  run g5_live_light 30 -uitest_tab live -uitest_theme light,blue; stop
+  run g6_live_dark 30 -uitest_tab live -uitest_theme dark,purple; stop
+  run g7_settings_dark 30 -uitest_tab settings -uitest_theme dark,purple; stop
+  run g8_movies_auto 30 -uitest_tab movie -uitest_theme auto,teal; stop
   sleep 1; cp "$LOG" $OUT/app.log; echo "glass screenshots done"; exit 0
 fi
 # first launch on a fresh simulator can take very long: wait until the app has logged in (max 3 min)

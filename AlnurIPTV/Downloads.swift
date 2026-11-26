@@ -661,6 +661,7 @@ struct DownloadsSection: View {
                     }
                 }
             }
+            .glassRows()
         }
     }
 

@@ -53,6 +53,15 @@ struct AlnurIPTVApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(app)
+                .tint(AppTheme.accent(app.settings.accent))
+                .onAppear {
+                    if let t = UserDefaults.standard.string(forKey: "uitest_theme") {
+                        let p = t.split(separator: ",").map(String.init)
+                        app.settings.theme = p[0]; if p.count > 1 { app.settings.accent = p[1] }
+                        app.saveSettings()
+                    }
+                    AppTheme.apply(app.settings)
+                }
         }
     }
 }

@@ -64,10 +64,15 @@ struct MovieDetail: View {
                 }
                 .buttonStyle(.bordered)
             }
-            if let p = info?.plot, !p.isEmpty { Section("Story") { Text(p).font(.callout) } }
-            if let c = info?.cast, !c.isEmpty { Section("Cast") { Text(c).font(.callout) } }
-            if let d = info?.director, !d.isEmpty { Section("Director") { Text(d).font(.callout) } }
+            .glassRows()
+            if let p = info?.plot, !p.isEmpty { Section("Story") { Text(p).font(.callout) }
+.glassRows() }
+            if let c = info?.cast, !c.isEmpty { Section("Cast") { Text(c).font(.callout) }
+.glassRows() }
+            if let d = info?.director, !d.isEmpty { Section("Director") { Text(d).font(.callout) }
+.glassRows() }
         }
+        .glassList()
         .navigationTitle(movie.name)
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -110,7 +115,9 @@ struct SeriesDetail: View {
                 }
                 .buttonStyle(.bordered)
             }
-            if let p = info?.plot ?? series.plot, !p.isEmpty { Section("Story") { Text(p).font(.callout).lineLimit(8) } }
+            .glassRows()
+            if let p = info?.plot ?? series.plot, !p.isEmpty { Section("Story") { Text(p).font(.callout).lineLimit(8) }
+.glassRows() }
 
             if let info {
                 if info.seasons.count > 1 {
@@ -148,12 +155,16 @@ struct SeriesDetail: View {
                         .contextMenu { Button { app.download(ep) } label: { Label("Download", systemImage: "arrow.down.circle") } }
                     }
                 }
+                .glassRows()
             } else if let error {
                 Section { Text(error).foregroundStyle(.red); Button("Try again") { Task { await load() } } }
+                .glassRows()
             } else {
                 Section { HStack { Spacer(); ProgressView(); Spacer() } }
+                .glassRows()
             }
         }
+        .glassList()
         .navigationTitle(series.name)
         .navigationBarTitleDisplayMode(.inline)
         .task { if info == nil { await load() } }

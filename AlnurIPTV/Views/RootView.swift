@@ -182,6 +182,7 @@ struct LoginView: View {
                         Text("Paste the playlist link from your provider. An Xtream link (…/get.php?username=…&password=…) gives all features; other playlists give channels and movies.")
                     }
                 }
+                .glassRows()
 
                 Section {
                     Button {
@@ -198,7 +199,9 @@ struct LoginView: View {
                 } footer: {
                     if let msg { Text(msg).foregroundStyle(.red) }
                 }
+                .glassRows()
             }
+            .glassList()
             .navigationTitle(addingUser ? "New user" : "Login")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { if addingUser { Button("Cancel") { dismiss() } } }

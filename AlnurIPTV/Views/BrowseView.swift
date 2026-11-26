@@ -26,8 +26,12 @@ struct BrowseView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .glassList()
+            .scrollDismissesKeyboard(.immediately)
             .navigationTitle(kind.title)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search category / \(kind.title.lowercased())")
+            .safeAreaInset(edge: .top, spacing: 0) {
+                GlassSearchField(prompt: "Search category / \(kind.title.lowercased())", text: $query)
+            }
             .refreshable { await app.ensure(kind, force: true) }
             .navigationDestination(for: CatRoute.self) { r in CategoryView(route: r) }
             .navigationDestination(for: Item.self) { it in DetailView(item: it) }
@@ -45,7 +49,7 @@ struct BrowseView: View {
 
     @ViewBuilder private var searchSections: some View {
         if results.isEmpty && catResults.isEmpty {
-            Section { Text("No results").foregroundStyle(.secondary) }
+            Section { Text("No results").foregroundStyle(.secondary) }.glassRows()
         }
         if !catResults.isEmpty {
             Section("Categories (\(catResults.count))") {
@@ -55,6 +59,7 @@ struct BrowseView: View {
                     }
                 }
             }
+            .glassRows()
         }
         if !results.isEmpty {
             Section("\(itemWord) (\(results.count >= 300 ? "300+" : String(results.count)))") {
@@ -62,6 +67,7 @@ struct BrowseView: View {
                     ItemLink(item: it, queue: results, index: i)
                 }
             }
+            .glassRows()
         }
     }
 
@@ -78,6 +84,7 @@ struct BrowseView: View {
                     }
                 }
             }
+            .glassRows()
         }
     }
 
@@ -128,12 +135,21 @@ struct CatRow: View {
     let name: String
     let count: Int?
     var body: some View {
-        HStack {
-            Image(systemName: "folder").foregroundStyle(.tint)
-            Text(name).lineLimit(2)
+        HStack(spacing: 14) {
+            Image(systemName: name == "All" ? "square.grid.2x2.fill" : "folder.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(.tint))
+            Text(name).font(.body.weight(.medium)).lineLimit(2)
             Spacer()
-            if let count { Text("\(count)").foregroundStyle(.secondary).font(.footnote) }
+            if let count {
+                Text("\(count)").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Capsule().fill(.primary.opacity(0.07)))
+            }
         }
+        .padding(.vertical, 3)
     }
 }
 
@@ -152,11 +168,16 @@ struct CategoryView: View {
             ForEach(Array(items.enumerated()), id: \.element.id) { i, it in
                 ItemLink(item: it, queue: items, index: i)
             }
+            .glassRows()
         }
-        .listStyle(.plain)
+        .listStyle(.insetGrouped)
+        .glassList()
+        .scrollDismissesKeyboard(.immediately)
         .navigationTitle(route.name)
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "Search in \(route.name)")
+        .safeAreaInset(edge: .top, spacing: 0) {
+            GlassSearchField(prompt: "Search in \(route.name)", text: $query)
+        }
         .toolbar {
             if route.kind != .live {
                 Button { sortNew.toggle() } label: { Image(systemName: sortNew ? "clock.fill" : "clock") }
@@ -206,8 +227,8 @@ struct ItemRow: View {
         HStack(spacing: 12) {
             RemoteImage(url: item.logo, placeholder: item.kind == .live ? "tv" : "film", fill: item.kind != .live)
                 .frame(width: item.kind == .live ? 54 : 44, height: item.kind == .live ? 40 : 62)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(Color.primary.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.displayName).font(.body).lineLimit(2)
                 HStack(spacing: 6) {

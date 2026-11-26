@@ -13,6 +13,7 @@ struct LibraryView: View {
                         ForEach(app.cont) { it in ItemLink(item: it, queue: [it], index: 0) }
                             .onDelete { idx in idx.map { app.cont[$0] }.forEach { app.removeCont($0) } }
                     }
+                    .glassRows()
                 }
                 ForEach([Kind.live, .movie, .series], id: \.self) { k in
                     let f = app.favs.filter { $0.kind == k }
@@ -21,6 +22,7 @@ struct LibraryView: View {
                             ForEach(Array(f.enumerated()), id: \.element.id) { i, it in ItemLink(item: it, queue: f, index: i) }
                                 .onDelete { idx in idx.map { f[$0] }.forEach { app.toggleFav($0) } }
                         }
+                        .glassRows()
                     }
                 }
                 if !app.recent.isEmpty {
@@ -29,12 +31,14 @@ struct LibraryView: View {
                             ItemLink(item: it, queue: [it], index: 0)
                         }
                     }
+                    .glassRows()
                     Section {
                         Button("Clear history", role: .destructive) { confirmClear = true }
                             .confirmationDialog("Clear continue watching, recently watched and most watched?", isPresented: $confirmClear, titleVisibility: .visible) {
                                 Button("Clear", role: .destructive) { app.clearHistory() }
                             }
                     }
+                    .glassRows()
                 }
             }
             .overlay {
@@ -46,6 +50,7 @@ struct LibraryView: View {
                     }
                 }
             }
+            .glassList()
             .navigationTitle("Library")
             .navigationDestination(for: Item.self) { it in DetailView(item: it) }
 
@@ -86,6 +91,9 @@ struct SettingsView: View {
                 } header: { Text("Users") } footer: {
                     Text("Tap a user to switch. Each user has their own favourites and continue watching.")
                 }
+                .glassRows()
+
+                AppearanceSection()
 
                 if let a = app.account {
                     Section("Account") {
@@ -99,6 +107,7 @@ struct SettingsView: View {
                             LabeledContent("Connections", value: "\(app.info.activeConnections) / \(app.info.maxConnections)")
                         }
                     }
+                    .glassRows()
                 }
                 Section {
                     Picker("Live format", selection: $app.settings.liveFormat) {
@@ -115,6 +124,7 @@ struct SettingsView: View {
                 } header: { Text("Player") } footer: {
                     Text("Buffer = how much video is loaded before it starts. 1 s: channels open faster. 3–5 s: fewer stops on slow internet (you notice it mainly on weak Wi-Fi / mobile data). Applies to the next channel or movie you open.\n\nThe server allows only one connection – if the PC / tablet is playing, the iPhone cannot stream.")
                 }
+                .glassRows()
                 .onChange(of: app.settings) { _ in app.saveSettings() }
 
                 Section {
@@ -122,6 +132,7 @@ struct SettingsView: View {
                 } header: { Text("Sound") } footer: {
                     Text("Boost makes quiet sound louder (up to 200 %); a limiter keeps loud parts from clipping. Your iPhone volume buttons keep working.")
                 }
+                .glassRows()
 
                 Section("Lists") {
                     ForEach([Kind.live, .movie, .series], id: \.self) { k in
@@ -139,6 +150,7 @@ struct SettingsView: View {
                     }
                     .disabled(refreshing)
                 }
+                .glassRows()
 
                 Section {
                     Button("Logout", role: .destructive) { confirmLogout = true }
@@ -146,10 +158,13 @@ struct SettingsView: View {
                             Button("Logout", role: .destructive) { app.logout() }
                         }
                 }
+                .glassRows()
                 Section {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                 }
+                .glassRows()
             }
+            .glassList()
             .navigationTitle("Settings")
             .sheet(isPresented: $addUser) { LoginView(addingUser: true).environmentObject(app) }
             .task { for k in [Kind.live, .movie, .series] { await app.ensure(k) } }
