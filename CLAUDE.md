@@ -99,7 +99,12 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   off when no download runs / app returns; if another app interrupts the sound → hand over to background session.
   Photos: remuxed file is 640x360 identity transform (landscape) → "Photos doesn't rotate" = his portrait lock.
   · 1.6.2: 1.6.1 crashed right after "Save to Photos" on his iPhone – PHAsset.fetchAssets (read access, no
-  NSPhotoLibraryUsageDescription → iOS kills the app; the simulator did not). Never read/fetch from Photos, add-only. iOS 18 simtest needs a long first launch on fresh runner images
+  NSPhotoLibraryUsageDescription → iOS kills the app; the simulator did not). Never read/fetch from Photos, add-only.
+  · 1.7.0 (his wish: glass look): `Views/Theme.swift` – AppBackground (blurred accent blobs), GlassRow (ultraThinMaterial row
+  background via `.glassRows()` on every Section), `.glassList()`, GlassSearchField (glass capsule pinned with
+  safeAreaInset, replaces `.searchable`), Settings → Appearance (Auto/Light/Dark + 8 accent colours, applied to all
+  windows via overrideUserInterfaceStyle/tintColor; AppSettings.theme/accent). Hook `-uitest_theme dark,purple`;
+  glass job screenshots g5–g8 show the browsing screens. iOS 18 simtest needs a long first launch on fresh runner images
   (now waits for "list live:"). Next: his iPhone feedback (PiP, sound, downloads), then merge vlc4 → main.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.
