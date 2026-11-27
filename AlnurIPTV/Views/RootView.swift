@@ -58,7 +58,8 @@ struct MainTabs: View {
                 app.settings.soundBoost = Int(snd.split(separator: ",").first ?? "100") ?? 100
                 app.saveSettings()
             }
-            if let u = UserDefaults.standard.string(forKey: "uitest_add_m3u") {
+            if !UITest.m3uDone, let u = UserDefaults.standard.string(forKey: "uitest_add_m3u") {
+                UITest.m3uDone = true
                 let p = u.components(separatedBy: "|")
                 let first = app.account
                 do { try await app.loginM3U(p[1], name: p[0]) } catch { dlog("add m3u failed \(error.localizedDescription)") }
