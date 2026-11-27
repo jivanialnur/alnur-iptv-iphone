@@ -57,8 +57,8 @@ final class KeepAwake {
     func stop() {
         guard on else { return }
         player?.stop(); player = nil; on = false
+        // back to the player's normal sound setting; the session stays active (the player may be playing)
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         dlog("keep-awake off")
     }
 }
@@ -167,8 +167,18 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
                 }
             }
         }
+        // the silent sound must start while the app is still in front (iOS refuses to start audio from the
+        // background – that is why 1.6.x did not help on the iPhone): "will resign active" comes just before
+        // home swipe / lock / app switch
+        NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.leavingApp()
+        }
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
             self?.enteredBackground()
+        }
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            // came back without really leaving (control centre, notification): no need to stay awake
+            if UIApplication.shared.applicationState == .active { KeepAwake.shared.stop() }
         }
         KeepAwake.shared.onInterrupted = { [weak self] in
             // the silent sound was stopped by another app: hand over to iOS's download service
@@ -280,9 +290,16 @@ final class Downloads: NSObject, ObservableObject, URLSessionDataDelegate, URLSe
 
     /// Leaving the app with a download running: keep the app awake so the fast download goes on;
     /// if that is not possible, hand it to iOS's (slower) background download service.
+    private func leavingApp() {
+        guard hasRunning, !PlayerController.pipNow else { return }
+        KeepAwake.shared.start()
+    }
+
     private func enteredBackground() {
         guard hasRunning else { return }
         if PlayerController.pipNow { dlog("download continues (PiP keeps the app running)"); return }
+        if KeepAwake.shared.on { dlog("download continues in the background at full speed (app kept awake)"); return }
+        // could not keep the app awake: iOS's own (slower) download service takes over
         if !KeepAwake.shared.start() { moveRunningToBackground() }
     }
 

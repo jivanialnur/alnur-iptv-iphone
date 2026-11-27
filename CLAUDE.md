@@ -104,7 +104,12 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   background via `.glassRows()` on every Section), `.glassList()`, GlassSearchField (glass capsule pinned with
   safeAreaInset, replaces `.searchable`), Settings → Appearance (Auto/Light/Dark + 8 accent colours, applied to all
   windows via overrideUserInterfaceStyle/tintColor; AppSettings.theme/accent). Hook `-uitest_theme dark,purple`;
-  glass job screenshots g5–g8 show the browsing screens. iOS 18 simtest needs a long first launch on fresh runner images
+  glass job screenshots g5–g8 show the browsing screens.
+  · 1.7.1 (his iPhone test: PiP works ✔; boost had no effect; background download not faster): boost = `player.audio.volume`
+  100–200 (VLC soft gain, float_mixer is in VLCKit; the `equalizer` filter is NOT in VLCKit iOS → 1.6/1.7.0 boost did nothing);
+  volume swipe continues above iPhone max into boost (hint "🔊 150% boost"), side button down resets boost.
+  KeepAwake now starts on willResignActive (iOS refuses to START audio from the background – why 1.6.1 failed on device;
+  the simulator does not suspend apps so simtest could not show it); stop() no longer deactivates the session. iOS 18 simtest needs a long first launch on fresh runner images
   (now waits for "list live:"). Next: his iPhone feedback (PiP, sound, downloads), then merge vlc4 → main.
 - Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
 - Not verifiable in the simulator: real audio volume swipe, real server streams.

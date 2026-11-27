@@ -163,7 +163,7 @@ sed -n "/=== 08_movie_seek/,/=== 08b/p" $OUT/app.log | grep -A3 "test: seek to" 
 echo "$F" | grep -q "fill layers=AVSampleBufferDisplayLayer\|fill layers= zoom=[1-9]" && echo "PASS  Fill: video layer set to fill the screen ($F)" || echo "FAIL  Fill ($F)"
 grep -q "users now: \[\"demo\", \"Bhai\"\] current=Bhai" $OUT/app.log && grep -q "after switch: current=demo" $OUT/app.log && echo "PASS  second user added, switch back works" || echo "FAIL  users ($(grep -o 'users now.*\|after switch.*' $OUT/app.log | tr '\n' ' '))"
 sed -n "/=== 07x_sound_set/,/=== 07y/p" $OUT/app.log > /tmp/s1.txt; sed -n "/=== 07y_sound_kept/,/=== 07z/p" $OUT/app.log > /tmp/s2.txt
-grep -q 'sound: boost 180% = +8.5 dB (player pre-amp now 8.5 dB)' /tmp/s1.txt && grep -q "PLAYING 1000" /tmp/s1.txt && echo "PASS  sound boost 180%: +8.5 dB set in VLC (read back from the player), channel plays" || echo "FAIL  sound filters ($(grep -o 'sound:.*' /tmp/s1.txt | head -1))"
+grep -q 'sound: boost 180% (player volume now 180)' /tmp/s1.txt && grep -q "PLAYING 1000" /tmp/s1.txt && echo "PASS  sound boost 180%: VLC volume 180 (read back from the player), channel plays" || echo "FAIL  sound filters ($(grep -o 'sound:.*' /tmp/s1.txt | head -1))"
 grep -q 'sound: boost 180%' /tmp/s2.txt && grep -q "PLAYING 1004" /tmp/s2.txt && echo "PASS  sound settings kept after app restart" || echo "FAIL  sound settings not kept"
 grep -q "player: to portrait" $OUT/app.log && echo "PASS  X in landscape turns to portrait (see 06b_portrait.png)" || echo "FAIL  to portrait"
 grep -q "player closed 1000" $OUT/app.log && echo "PASS  X closes the player" || echo "FAIL  X does not close the player"

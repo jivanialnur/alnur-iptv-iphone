@@ -490,13 +490,13 @@ final class PlayerController: NSObject, ObservableObject {
     }
 
     func applyBoost(log: Bool = true) {
+        // VLC's own volume goes up to 200 % (software gain in VLC's audio mixer).
+        // (1.6.x used the equalizer pre-amp – that filter is not inside VLCKit for iOS, so nothing happened.)
         let boost = min(max(app.settings.soundBoost, 100), 200)
-        let db = Float(10 * log2(Double(boost) / 100))
         vlc { p in
-            if boost <= 100 { p.equalizer = nil }
-            else { let eq = VLCAudioEqualizer(); eq.preAmplification = db; p.equalizer = eq }
-            let now = p.equalizer?.preAmplification ?? 0
-            if log { DispatchQueue.main.async { dlog(String(format: "sound: boost %d%% = +%.1f dB (player pre-amp now %.1f dB)", boost, db, now)) } }
+            p.audio?.volume = Int32(boost)
+            let now = p.audio?.volume ?? -1
+            if log { DispatchQueue.main.async { dlog("sound: boost \(boost)% (player volume now \(now))") } }
         }
     }
 

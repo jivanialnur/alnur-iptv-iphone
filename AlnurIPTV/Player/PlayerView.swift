@@ -192,7 +192,13 @@ struct PlayerScreen: View {
             }
             let pa = UserDefaults.standard.double(forKey: "uitest_portrait_after")
             if pa > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + pa) { toPortrait() } }
-            sysVolume.observe { v in showHint((v == 0 ? "🔇 " : "🔊 ") + "\(Int((v * 100).rounded()))%") }
+            sysVolume.observe { v in
+                // side button down while boosted: the boost goes first
+                if v < 0.99, app.settings.soundBoost > 100, dragMode != 2 {
+                    app.settings.soundBoost = 100; app.saveSettings(); pc.applyBoost()
+                }
+                showHint((v == 0 ? "🔇 " : "🔊 ") + "\(Int((v * 100).rounded()))%")
+            }
         }
         .onDisappear {
             pc.stop()
@@ -585,7 +591,9 @@ struct PlayerScreen: View {
                     guard abs(v.translation.height) > abs(v.translation.width) else { return }
                     let x = v.startLocation.x
                     dragMode = x < size.width / 3 ? 1 : x > size.width * 2 / 3 ? 2 : 3
-                    dragStartValue = dragMode == 1 ? Float(UIScreen.main.brightness) : sysVolume.value
+                    // volume swipe runs 0…2: up to 1 = iPhone volume, above = boost 100…200 %
+                    dragStartValue = dragMode == 1 ? Float(UIScreen.main.brightness)
+                        : sysVolume.value + (sysVolume.value >= 0.99 ? Float(app.settings.soundBoost - 100) / 100 : 0)
                 }
                 if dragMode == 3 { return }
                 let delta = Float(-v.translation.height / max(size.height * 0.8, 1))
@@ -594,12 +602,23 @@ struct PlayerScreen: View {
                     UIScreen.main.brightness = CGFloat(b)
                     showHint("☀️ \(Int(b * 100))%")
                 } else if dragMode == 2 {
-                    let vol = min(max(dragStartValue + delta, 0), 1)
+                    let total = min(max(dragStartValue + delta, 0), 2)
+                    let vol = min(total, 1)
                     if abs(vol - sysVolume.value) >= 0.01 { sysVolume.value = vol }
-                    showHint((vol == 0 ? "🔇 " : "🔊 ") + "\(Int((vol * 100).rounded()))%")
+                    let boost = 100 + Int(((max(total - 1, 0)) * 100 / 5).rounded()) * 5
+                    if boost != app.settings.soundBoost {
+                        app.settings.soundBoost = boost
+                        pc.applyBoost(log: false)
+                    }
+                    if boost > 100 {
+                        showHint("🔊 \(boost)%" + (boost > 150 ? " ⚠️" : " boost"))
+                    } else {
+                        showHint((vol == 0 ? "🔇 " : "🔊 ") + "\(Int((vol * 100).rounded()))%")
+                    }
                 }
             }
             .onEnded { v in
+                if dragMode == 2 { app.saveSettings(); dlog("swipe volume end: system \(Int(sysVolume.value * 100))% boost \(app.settings.soundBoost)%") }
                 if dragMode == 3 { middleSwipe(up: v.translation.height < -50, down: v.translation.height > 50, landscape: size.width > size.height) }
                 dragMode = 0
                 if let h = hint { showHint(h) }
