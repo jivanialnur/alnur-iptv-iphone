@@ -110,6 +110,6 @@ Owner: Alnur. Writes romanized Gujarati / Gujarati – answer in the same, short
   volume swipe continues above iPhone max into boost (hint "🔊 150% boost"), side button down resets boost.
   KeepAwake now starts on willResignActive (iOS refuses to START audio from the background – why 1.6.1 failed on device;
   the simulator does not suspend apps so simtest could not show it); stop() no longer deactivates the session. iOS 18 simtest needs a long first launch on fresh runner images
-  (now waits for "list live:"). Next: his iPhone feedback (PiP, sound, downloads), then merge vlc4 → main.
-- Work is on branch `app-v1` (17/17 simtest checks pass); not yet merged to `main`. 1.0.1 installed on his iPhone via Sideloadly.
+  (now waits for "list live:"). Next: his feedback on 1.7.1 boost + background download on the real iPhone.
+- 2026-11-27: his iPhone test – PiP works. vlc4 MERGED into `main` (1.7.1); work on `main` from now on (vlc4 = same).
 - Not verifiable in the simulator: real audio volume swipe, real server streams.
